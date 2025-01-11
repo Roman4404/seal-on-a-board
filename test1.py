@@ -27,21 +27,38 @@ class Penguin:
         self.jump_height = 10
         self.is_jumping = False
         self.jump_count = 10
+        self.old_pos = 0
+
+    # def jump(self):
+    #
+    #     if not self.is_jumping:
+    #         self.is_jumping = True
+    #     a = self.rect.y
+    #     self.rect.y += 1
+    #     while a != self.rect.y:
+    #         print(self.rect.y)
+    #         if self.is_jumping:
+    #             if self.jump_count >= -10:
+    #                 neg = 1
+    #                 if self.jump_count < 0:
+    #                     neg = -1
+    #                 self.rect.y -= (self.jump_count ** 2) * 0.5 * neg
+    #                 self.jump_count -= 1
+    #             else:
+    #                 self.is_jumping = False
+    #                 self.jump_count = 10
 
     def jump(self):
         if not self.is_jumping:
+            self.old_pos = self.rect.y
+            self.rect.y -= 200
             self.is_jumping = True
+        else:
+            self.rect.y += 5
+        if self.rect.y == self.old_pos:
+            self.is_jumping = False
+            return True
 
-        if self.is_jumping:
-            if self.jump_count >= -10:
-                neg = 1
-                if self.jump_count < 0:
-                    neg = -1
-                self.rect.y -= (self.jump_count ** 2) * 0.5 * neg
-                self.jump_count -= 1
-            else:
-                self.is_jumping = False
-                self.jump_count = 10
 
     def draw(self, screen):
         screen.blit(self.image, self.rect)
@@ -69,6 +86,7 @@ def main():
     penguin = Penguin()
     obstacles = []
     score = 0
+    is_jumping = False
 
     running = True
     while running:
@@ -80,7 +98,11 @@ def main():
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:  # Прыжок по нажатию стрелки вверх
-                    penguin.jump()
+                    is_jumping = True
+
+        if is_jumping:
+            if penguin.jump():
+                is_jumping = False
 
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2:
@@ -94,8 +116,7 @@ def main():
                 obstacles.remove(obstacle)
                 score += 1
 
-        # Обработка прыжка пингвина
-        penguin.jump()
+        # Обработка изображения пингвина
         penguin.draw(screen)
 
         # Проверка на столкновение
