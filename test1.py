@@ -20,14 +20,15 @@ obstacle_image = pygame.image.load('data/cloud1.png')
 # Класс для пингвина
 class Penguin:
     def __init__(self):
-        self.image = penguin_image
-        self.rect = self.image.get_rect()
-        self.rect.x = 50
-        self.rect.y = SCREEN_HEIGHT // 2
-        self.jump_height = 10
-        self.is_jumping = False
-        self.jump_count = 10
-        self.old_pos = 0
+        self.image = penguin_image #Изображение пингивина
+        self.rect = self.image.get_rect() #Изображение
+        self.rect.x = 50 #Кординаты x
+        self.rect.y = SCREEN_HEIGHT // 2 #Кординаты y
+        self.jump_height = 10 #?
+        self.is_jumping = False #Показатель прыжка
+        self.jump_count = 10 #?
+        self.old_pos = 0 #Переменная для старой позиции
+        self.jump_force = 200 #Сила прыжка
 
     # def jump(self):
     #
@@ -49,15 +50,15 @@ class Penguin:
     #                 self.jump_count = 10
 
     def jump(self):
-        if not self.is_jumping:
-            self.old_pos = self.rect.y
-            self.rect.y -= 200
-            self.is_jumping = True
+        if not self.is_jumping: #Проверка на прыжок игрока
+            self.old_pos = self.rect.y #Запоминаем старую позицию
+            self.rect.y -= self.jump_force #Сам прыжок
+            self.is_jumping = True #Теперь игрок в прыжке
         else:
-            self.rect.y += 5
-        if self.rect.y == self.old_pos:
+            self.rect.y += 5 #Игрок постепенно опускается
+        if self.rect.y == self.old_pos: #Проверка, что игрок приземлился
             self.is_jumping = False
-            return True
+            return True #Даем сигнал, что игрок приземлился
 
 
     def draw(self, screen):
@@ -86,7 +87,7 @@ def main():
     penguin = Penguin()
     obstacles = []
     score = 0
-    is_jumping = False
+    is_jumping = False # Показатель прыжка
 
     running = True
     while running:
@@ -100,7 +101,9 @@ def main():
                 if event.key == pygame.K_UP:  # Прыжок по нажатию стрелки вверх
                     is_jumping = True
 
+        # Проверка, что игрок в прыжке
         if is_jumping:
+            # Проверка, что игрок приземлился
             if penguin.jump():
                 is_jumping = False
 
