@@ -1,15 +1,10 @@
 import pygame
 import random
 
-# Инициализация Pygame
 pygame.init()
-
-# Константы
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 FPS = 60
-
-# Цвета
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 
@@ -20,49 +15,14 @@ obstacle_image = pygame.image.load('data/cloud1.png')
 # Класс для пингвина
 class Penguin:
     def __init__(self):
-        self.image = penguin_image #Изображение пингивина
-        self.rect = self.image.get_rect() #Изображение
-        self.rect.x = 50 #Кординаты x
-        self.rect.y = SCREEN_HEIGHT // 2 #Кординаты y
-        self.jump_height = 10 #?
-        self.is_jumping = False #Показатель прыжка
-        self.jump_count = 10 #?
-        self.old_pos = 0 #Переменная для старой позиции
-        self.jump_force = 200 #Сила прыжка
+        self.image = penguin_image
+        self.rect = self.image.get_rect()
+        self.rect.x = 50  # Начальная позиция по оси X
+        self.rect.y = SCREEN_HEIGHT // 2 + 190  # Позиция по оси Y
 
-    # def jump(self):
-    #
-    #     if not self.is_jumping:
-    #         self.is_jumping = True
-    #     a = self.rect.y
-    #     self.rect.y += 1
-    #     while a != self.rect.y:
-    #         print(self.rect.y)
-    #         if self.is_jumping:
-    #             if self.jump_count >= -10:
-    #                 neg = 1
-    #                 if self.jump_count < 0:
-    #                     neg = -1
-    #                 self.rect.y -= (self.jump_count ** 2) * 0.5 * neg
-    #                 self.jump_count -= 1
-    #             else:
-    #                 self.is_jumping = False
-    #                 self.jump_count = 10
-
-    def jump(self):
-        if not self.is_jumping: #Проверка на прыжок игрока
-            self.old_pos = self.rect.y #Запоминаем старую позицию
-            self.rect.y -= self.jump_force #Сам прыжок
-            self.is_jumping = True #Теперь игрок в прыжке
-        else:
-            self.rect.y += 5 #Игрок постепенно опускается
-        if self.rect.y == self.old_pos: #Проверка, что игрок приземлился
-            self.is_jumping = False
-            return True #Даем сигнал, что игрок приземлился
-
-
-    def draw(self, screen):
-        screen.blit(self.image, self.rect)
+    def draw(self, screen, offset):
+        # Отрисовываем пингвина с учетом смещения
+        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
 # Класс для препятствий
 class Obstacle:
@@ -70,13 +30,45 @@ class Obstacle:
         self.image = obstacle_image
         self.rect = self.image.get_rect()
         self.rect.x = SCREEN_WIDTH
-        self.rect.y = SCREEN_HEIGHT - 100  # Положение препятствия
+        self.rect.y = SCREEN_HEIGHT - 80  # Положение препятствия
 
-    def move(self):
-        self.rect.x -= 5  # Движение препятствия влево
+    def move(self, speed):
+        self.rect.x -= speed  # Движение препятствия влево
 
-    def draw(self, screen):
-        screen.blit(self.image, self.rect)
+    def draw(self, screen, offset):
+        # Отрисовываем препятствие с учетом смещения
+        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
+
+# Функция для отображения диалогового окна
+def show_game_over_screen(screen, score):
+    font = pygame.font.Font(None, 74)
+    text = font.render("Game Over", True, WHITE)
+    text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+
+    font_small = pygame.font.Font(None, 36)
+    score_text = font_small.render(f"Your Score: {score}", True, WHITE)
+    score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+
+    restart_text = font_small.render("Press R to Restart or Q to Quit", True, WHITE)
+    restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+
+    while True:
+        screen.fill(BLUE)
+        screen.blit(text, text_rect)
+        screen.blit(score_text, score_rect)
+        screen.blit(restart_text, restart_rect)
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:  # Перезапуск игры
+                    return True
+                if event.key == pygame.K_q:  # Выход из игры
+                    pygame.quit()
+                    return
 
 # Основная функция игры
 def main():
@@ -87,7 +79,9 @@ def main():
     penguin = Penguin()
     obstacles = []
     score = 0
-    is_jumping = False # Показатель прыжка
+    lives = 3  # Количество жизней
+    move_speed = 5  # Скорость движения
+    offset = 0  # Смещение для движения игрового поля
 
     running = True
     while running:
@@ -97,44 +91,47 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:  # Прыжок по нажатию стрелки вверх
-                    is_jumping = True
 
-        # Проверка, что игрок в прыжке
-        if is_jumping:
-            # Проверка, что игрок приземлился
-            if penguin.jump():
-                is_jumping = False
+        keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
+        if keys[pygame.K_RIGHT]:  # Движение игрового поля вперед
+            offset += move_speed  # Уменьшаем смещение
+        if keys[pygame.K_LEFT]:  # Движение игрового поля назад
+            offset -= move_speed  # Увеличиваем смещение
 
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2:
             obstacles.append(Obstacle())
 
-        # Движение и отрисовка препятствий
+        # Отрисовка препятствий
         for obstacle in obstacles:
-            obstacle.move()
-            obstacle.draw(screen)
+            obstacle.move(5)  # Двигаем препятствия влево
+            obstacle.draw(screen, 0)  # Отрисовываем препятствия с учетом смещения
             if obstacle.rect.x < 0:  # Удаление препятствий, вышедших за экран
                 obstacles.remove(obstacle)
                 score += 1
 
-        # Обработка изображения пингвина
-        penguin.draw(screen)
-
+        penguin.draw(screen, offset)  # Отрисовываем пингвина с учетом смещения
         # Проверка на столкновение
         for obstacle in obstacles:
-            if penguin.rect.colliderect(obstacle.rect):
-                running = False  # Конец игры при столкновении
-
-        # Отображение счета
+            if penguin.rect.x == obstacle.rect.x:
+                lives -= 1  # Уменьшаем количество жизней
+                obstacles.remove(obstacle)  # Удаляем столкнувшееся препятствие
+                if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
+                    if show_game_over_screen(screen, score):
+                        penguin = Penguin()  # Перезапускаем игру
+                        obstacles.clear()  # Очищаем препятствия
+                        score = 0  # Сбрасываем счет
+                        lives = 3  # Восстанавливаем жизни
+        # Отображение счета и жизней
         font = pygame.font.Font(None, 36)
-        text = font.render(f'Score: {score}', True, WHITE)
-        screen.blit(text, (10, 10))
+        score_text = font.render(f'Score: {score}', True, WHITE)
+        lives_text = font.render(f'Lives: {lives}', True, WHITE)
+        screen.blit(score_text, (10, 10))
+        screen.blit(lives_text, (10, 50))
 
-        pygame.display.flip()
+        pygame.display.flip()  # Обновляем экран
 
-    pygame.quit()
+    pygame.quit()  # Выход из игры
 
 if __name__ == "__main__":
     main()
