@@ -9,8 +9,11 @@ WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 
 # Загрузка изображений
-penguin_image = pygame.image.load('data/Pingein_player.png')
+penguin_image = pygame.image.load('data/Pingein_player2.png')
 obstacle_image = pygame.image.load('data/cloud1.png')
+water_image = pygame.image.load('data/water_concept.png')
+sky_image = pygame.image.load('data/sky_concept2.png')
+wave_image = pygame.image.load('data/wave.png')
 
 # Класс для пингвина
 class Penguin:
@@ -18,7 +21,7 @@ class Penguin:
         self.image = penguin_image
         self.rect = self.image.get_rect()
         self.rect.x = 50  # Начальная позиция по оси X
-        self.rect.y = SCREEN_HEIGHT // 2 + 190  # Позиция по оси Y
+        self.rect.y = SCREEN_HEIGHT // 2 + 90  # Позиция по оси Y
 
     def draw(self, screen, offset):
         # Отрисовываем пингвина с учетом смещения
@@ -27,10 +30,31 @@ class Penguin:
 # Класс для препятствий
 class Obstacle:
     def __init__(self):
+        self.image = wave_image
+        self.rect = self.image.get_rect()
+        self.rect.x = -100
+        self.rect.y = SCREEN_HEIGHT - 240  # Положение препятствия
+
+    def move(self, speed):
+        self.rect.x += speed  # Движение препятствия влево
+
+    def draw(self, screen, offset):
+        # Отрисовываем препятствие с учетом смещения
+        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
+
+
+class Water:
+    def draw(self, screen):
+        for x in range(0, 800, 96):
+            screen.blit(water_image, (x, 540))
+
+
+class Cloud:
+    def __init__(self):
         self.image = obstacle_image
         self.rect = self.image.get_rect()
         self.rect.x = SCREEN_WIDTH
-        self.rect.y = SCREEN_HEIGHT - 80  # Положение препятствия
+        self.rect.y = SCREEN_HEIGHT - 500  # Положение препятствия
 
     def move(self, speed):
         self.rect.x -= speed  # Движение препятствия влево
@@ -38,6 +62,26 @@ class Obstacle:
     def draw(self, screen, offset):
         # Отрисовываем препятствие с учетом смещения
         screen.blit(self.image, (self.rect.x + offset, self.rect.y))
+
+# Занимается небом
+class Sky:
+    def __init__(self):
+        self.clouds = []
+
+    def draw_sky(self, screen):
+        for x in range(0, 800, 512):
+            screen.blit(sky_image, (x, 0))
+
+    def draw_cloud(self, screen):
+        if random.randint(1, 100) < 2 and len(self.clouds) < 4:
+            self.clouds.append(Cloud())
+
+        for cloud in self.clouds:
+            cloud.move(5)  # Двигаем препятствия влево
+            cloud.draw(screen, 0)  # Отрисовываем препятствия с учетом смещения
+            if cloud.rect.x < 0:  # Удаление облака, вышедших за экран
+                self.clouds.remove(cloud)
+
 
 # Функция для отображения диалогового окна
 def show_game_over_screen(screen, score):
@@ -77,16 +121,16 @@ def main():
     clock = pygame.time.Clock()
 
     penguin = Penguin()
+    water = Water()
+    sky = Sky()
     obstacles = []
     score = 0
     lives = 3  # Количество жизней
     move_speed = 5  # Скорость движения
     offset = 0  # Смещение для движения игрового поля
-
     running = True
     while running:
         clock.tick(FPS)
-        screen.fill(BLUE)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -98,22 +142,33 @@ def main():
         if keys[pygame.K_LEFT]:  # Движение игрового поля назад
             offset -= move_speed  # Увеличиваем смещение
 
+        # Ограничение смещения, чтобы пингвин не выходил за пределы экрана
+        if penguin.rect.x + offset < 0:
+            offset = -penguin.rect.x  # Не даем пингвину выйти за левую границу
+        if penguin.rect.x + offset > SCREEN_WIDTH - penguin.rect.width:
+            offset = SCREEN_WIDTH - penguin.rect.width - penguin.rect.x  # Не даем пингвину выйти за правую границу
+
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2:
             obstacles.append(Obstacle())
+
+        sky.draw_sky(screen) #Прорисовываем небо
+        sky.draw_cloud(screen) #Прорисовываем облака
 
         # Отрисовка препятствий
         for obstacle in obstacles:
             obstacle.move(5)  # Двигаем препятствия влево
             obstacle.draw(screen, 0)  # Отрисовываем препятствия с учетом смещения
-            if obstacle.rect.x < 0:  # Удаление препятствий, вышедших за экран
+            if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
                 obstacles.remove(obstacle)
                 score += 1
 
+        water.draw(screen) #Прорисовываем воду
         penguin.draw(screen, offset)  # Отрисовываем пингвина с учетом смещения
         # Проверка на столкновение
         for obstacle in obstacles:
             if penguin.rect.x == obstacle.rect.x:
+                print(penguin.rect.x, obstacle.rect.x)
                 lives -= 1  # Уменьшаем количество жизней
                 obstacles.remove(obstacle)  # Удаляем столкнувшееся препятствие
                 if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
@@ -128,7 +183,6 @@ def main():
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
         screen.blit(score_text, (10, 10))
         screen.blit(lives_text, (10, 50))
-
         pygame.display.flip()  # Обновляем экран
 
     pygame.quit()  # Выход из игры
