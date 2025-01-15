@@ -33,7 +33,7 @@ class Obstacle:
     def __init__(self):
         self.image = wave_image
         self.rect = self.image.get_rect()
-        self.rect.x = -self.rect.width  # Начальная позиция волны (за левым краем экрана)
+        self.rect.x = -SCREEN_WIDTH  # Начальная позиция волны (за левым краем экрана)
         self.rect.y = SCREEN_HEIGHT - 240  # Положение препятствия
 
     def move(self, speed):
@@ -155,7 +155,6 @@ def main():
     score = 0
     lives = 3  # Количество жизней
     move_speed = 5  # Скорость движения
-    offset = 0  # Смещение для движения игрового поля
     running = True
     while running:
         clock.tick(FPS)
@@ -165,16 +164,16 @@ def main():
                 running = False
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
-        if keys[pygame.K_RIGHT]:  # Движение игрового поля вперед
-            offset += move_speed  # Уменьшаем смещение
-        if keys[pygame.K_LEFT]:  # Движение игрового поля назад
-            offset -= move_speed  # Увеличиваем смещение
+        if keys[pygame.K_RIGHT]:  # Движение пингвина вправо
+            penguin.rect.x += move_speed
+        if keys[pygame.K_LEFT]:  # Движение пингвина влево
+            penguin.rect.x -= move_speed
 
-        # Ограничение смещения, чтобы пингвин не выходил за пределы экрана
-        if penguin.rect.x + offset < 0:
-            offset = -penguin.rect.x  # Не даем пингвину выйти за левую границу
-        if penguin.rect.x + offset > SCREEN_WIDTH - penguin.rect.width:
-            offset = SCREEN_WIDTH - penguin.rect.width - penguin.rect.x  # Не даем пингвину выйти за правую границу
+        # Ограничение движения пингвина, чтобы он не выходил за пределы экрана
+        if penguin.rect.x < 0:
+            penguin.rect.x = 0
+        if penguin.rect.x > SCREEN_WIDTH - penguin.rect.width:
+            penguin.rect.x = SCREEN_WIDTH - penguin.rect.width
 
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2:
@@ -186,13 +185,14 @@ def main():
         # Отрисовка препятствий
         for obstacle in obstacles:
             obstacle.move(move_speed)  # Двигаем препятствия влево
-            obstacle.draw(screen, offset)  # Отрисовываем препятствия с учетом смещения
+            obstacle.draw(screen, 0)  # Отрисовываем препятствия без смещения
+
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
                 obstacles.remove(obstacle)
                 score += 1
 
         water.draw(screen)  # Прорисовываем воду
-        penguin.draw(screen, offset)  # Отрисовываем пингвина с учетом смещения
+        penguin.draw(screen, 0)  # Отрисовываем пингвина без смещения
 
         # Проверка на столкновение с волной
         for obstacle in obstacles:
@@ -205,6 +205,7 @@ def main():
                         obstacles.clear()  # Очищаем препятствия
                         score = 0  # Сбрасываем счет
                         lives = 3
+
         font = pygame.font.Font(None, 36)
         score_text = font.render(f'Score: {score}', True, WHITE)
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
