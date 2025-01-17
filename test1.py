@@ -8,6 +8,8 @@ SCREEN_HEIGHT = 620
 FPS = 60
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
+all_sprites = pygame.sprite.Group()
+bird_group = pygame.sprite.Group()
 
 # Загрузка изображений
 penguin_image = pygame.image.load('data/Pingein_player2.png')
@@ -95,19 +97,16 @@ class Cloud:
         # Отрисовываем препятствие с учетом смещения
         screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
-class Bird:
-    def __init__(self):
+class Bird(pygame.sprite.Sprite):
+    def __init__(self, pos_x, pos_y):
+        super().__init__(bird_group, all_sprites)
         self.image = bird_image
         self.rect = self.image.get_rect()
         self.rect.x = SCREEN_WIDTH
-        # Устанавливаем Y-координату ниже облаков
-        self.rect.y = random.randint(SCREEN_HEIGHT - 500 + 20, SCREEN_HEIGHT - 200)
+        self.rect.y = random.randint(50, 150)  # Положение птицы
 
-    def move(self, speed):
-        self.rect.x += speed
-
-    def draw(self, screen, offset):
-        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
+    def update(self, speed):
+        self.rect.x -= speed  # Движениептицы влево
 
 # Занимается небом
 class Sky:
