@@ -4,7 +4,7 @@ import os
 
 pygame.init()
 SCREEN_WIDTH = 860
-SCREEN_HEIGHT = 600
+SCREEN_HEIGHT = 620
 FPS = 60
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
@@ -15,6 +15,7 @@ cloud_image = pygame.image.load('data/cloud1.png')
 water_image = pygame.image.load('data/water_concept.png')
 sky_image = pygame.image.load('data/sky_concept2.png')
 wave_image = pygame.image.load('data/wave.png')
+bird_image = pygame.image.load('data/bird_concept.png')
 
 # Класс для пингвина
 class Penguin:
@@ -22,7 +23,39 @@ class Penguin:
         self.image = penguin_image
         self.rect = self.image.get_rect()
         self.rect.x = 50  # Начальная позиция по оси X
-        self.rect.y = SCREEN_HEIGHT // 2 + 90  # Позиция по оси Y
+        self.start_y = SCREEN_HEIGHT // 2 + 90  # Сохранение начальной позиции по оси Y
+        self.rect.y = self.start_y  # Позиция по оси Y
+        self.is_jumping = False  # Состояние прыжка
+        self.jump_height = 10  # Высота прыжка
+        self.jump_count = self.jump_height  # Счетчик прыжка
+        self.is_hanging = False  # Состояние "зацепления"
+        self.hang_time = 0  # Время, в течение которого пингвин висит
+
+    def jump(self):
+        if self.is_hanging:
+            return  # Если пингвин висит, не позволяет прыгать
+
+        if self.is_jumping:
+            if self.jump_count >= -self.jump_height:
+                neg = 1
+                if self.jump_count < 0:
+                    neg = -1
+                self.rect.y -= (self.jump_count ** 2) * 0.5 * neg  # Парабола прыжка
+                self.jump_count -= 1
+            else:
+                self.is_jumping = False
+                self.jump_count = self.jump_height
+                self.rect.y = self.start_y  # Возвращаем на начальную высоту после прыжка
+
+    def hang(self):
+        self.is_hanging = True
+        self.hang_time = pygame.time.get_ticks()  # Запоминаем текущее время
+
+    def update(self):
+        if self.is_hanging:
+            # Проверяем, прошло ли 2 секунды (2000 мс)
+            if pygame.time.get_ticks() - self.hang_time >= 2000:
+                self.is_hanging = False  # Сбрасываем состояние "зацепления"
 
     def draw(self, screen, offset):
         # Отрисовываем пингвина с учетом смещения
@@ -33,7 +66,7 @@ class Obstacle:
     def __init__(self):
         self.image = wave_image
         self.rect = self.image.get_rect()
-        self.rect.x = -self.rect.width  # Начальная позиция волны (за левым краем экрана)
+        self.rect.x = -SCREEN_WIDTH  # Начальная позиция волны (за левым краем экрана)
         self.rect.y = SCREEN_HEIGHT - 240  # Положение препятствия
 
     def move(self, speed):
@@ -60,6 +93,20 @@ class Cloud:
 
     def draw(self, screen, offset):
         # Отрисовываем препятствие с учетом смещения
+        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
+
+class Bird:
+    def __init__(self):
+        self.image = bird_image
+        self.rect = self.image.get_rect()
+        self.rect.x = SCREEN_WIDTH
+        # Устанавливаем Y-координату ниже облаков
+        self.rect.y = random.randint(SCREEN_HEIGHT - 500 + 20, SCREEN_HEIGHT - 200)
+
+    def move(self, speed):
+        self.rect.x += speed
+
+    def draw(self, screen, offset):
         screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
 # Занимается небом
@@ -152,10 +199,10 @@ def main():
     water = Water()
     sky = Sky()
     obstacles = []
+    birds = []
     score = 0
     lives = 3  # Количество жизней
     move_speed = 5  # Скорость движения
-    offset = 0  # Смещение для движения игрового поля
     running = True
     while running:
         clock.tick(FPS)
@@ -165,20 +212,26 @@ def main():
                 running = False
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
-        if keys[pygame.K_RIGHT]:  # Движение игрового поля вперед
-            offset += move_speed  # Уменьшаем смещение
-        if keys[pygame.K_LEFT]:  # Движение игрового поля назад
-            offset -= move_speed  # Увеличиваем смещение
+        if keys[pygame.K_RIGHT]:  # Движение пингвина вправо
+            penguin.rect.x += move_speed
+        if keys[pygame.K_LEFT]:  # Движение пингвина влево
+            penguin.rect.x -= move_speed
+        if keys[pygame.K_UP] and not penguin.is_jumping:  # Прыжок при нажатии пробела
+            penguin.is_jumping = True
 
-        # Ограничение смещения, чтобы пингвин не выходил за пределы экрана
-        if penguin.rect.x + offset < 0:
-            offset = -penguin.rect.x  # Не даем пингвину выйти за левую границу
-        if penguin.rect.x + offset > SCREEN_WIDTH - penguin.rect.width:
-            offset = SCREEN_WIDTH - penguin.rect.width - penguin.rect.x  # Не даем пингвину выйти за правую границу
+        # Ограничение движения пингвина, чтобы он не выходил за пределы экрана
+        if penguin.rect.x < 0:
+            penguin.rect.x = 0
+        if penguin.rect.x > SCREEN_WIDTH - penguin.rect.width:
+            penguin.rect.x = SCREEN_WIDTH - penguin.rect.width
 
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2:
             obstacles.append(Obstacle())
+
+        # Генерация птиц с вероятностью 1%
+        if random.randint(1, 100) < 1:  # Измените вероятность по желанию
+            birds.append(Bird())
 
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
@@ -186,13 +239,23 @@ def main():
         # Отрисовка препятствий
         for obstacle in obstacles:
             obstacle.move(move_speed)  # Двигаем препятствия влево
-            obstacle.draw(screen, offset)  # Отрисовываем препятствия с учетом смещения
+            obstacle.draw(screen, 0)  # Отрисовываем препятствия без смещения
+
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
                 obstacles.remove(obstacle)
                 score += 1
 
+        # Отрисовка птиц
+        for bird in birds:
+            bird.move(move_speed)  # Двигаем птиц влево
+            bird.draw(screen, 0)  # Отрисовываем птиц без смещения
+
+            if bird.rect.x < 0:  # Удаление птиц, вышедших за экран
+                birds.remove(bird)
+
         water.draw(screen)  # Прорисовываем воду
-        penguin.draw(screen, offset)  # Отрисовываем пингвина с учетом смещения
+        penguin.jump()  # Обновляем состояние прыжка пингвина
+        penguin.draw(screen, 0)  # Отрисовываем пингвина без смещения
 
         # Проверка на столкновение с волной
         for obstacle in obstacles:
@@ -203,8 +266,16 @@ def main():
                     if show_game_over_screen(screen, score):
                         penguin = Penguin()  # Перезапускаем игру
                         obstacles.clear()  # Очищаем препятствия
+                        birds.clear()  # Очищаем птиц
                         score = 0  # Сбрасываем счет
                         lives = 3
+
+        for bird in birds:
+            if (penguin.rect.x + 50 > bird.rect.x > penguin.rect.x - 50 and  # Проверка по X
+                    penguin.rect.y - 50 <= bird.rect.y <= penguin.rect.y + 50):  # Проверка по Y
+                birds.remove(bird)  # Удаляем схваченную птицу
+                score += 5  # Увеличиваем счет за схваченную птицу
+
         font = pygame.font.Font(None, 36)
         score_text = font.render(f'Score: {score}', True, WHITE)
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
