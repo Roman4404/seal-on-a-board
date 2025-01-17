@@ -23,7 +23,7 @@ class Penguin:
     def __init__(self):
         self.image = penguin_image
         self.rect = self.image.get_rect()
-        self.rect.x = 50  # Начальная позиция по оси X
+        self.rect.x = SCREEN_WIDTH // 2 - 100 # Начальная позиция по оси X
         self.rect.y = SCREEN_HEIGHT // 2 + 115  # Позиция по оси Y
         self.sit_down = False
 
@@ -42,11 +42,12 @@ class Penguin:
 
 # Класс для препятствий
 class Obstacle:
-    def __init__(self):
+    def __init__(self, id_obstacle):
         self.image = wave_image
         self.rect = self.image.get_rect()
         self.rect.x = -SCREEN_WIDTH  # Начальная позиция волны (за левым краем экрана)
         self.rect.y = SCREEN_HEIGHT - 300  # Положение препятствия
+        self.id = id_obstacle
 
     def move(self, speed):
         self.rect.x += speed  # Движение препятствия вправо
@@ -122,7 +123,8 @@ def show_start_screen(screen):
                 pygame.quit()
                 return
             if event .type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:  return  # Запускаем основную игру
+                if event.key == pygame.K_p:
+                    return  # Запускаем основную игру
                 if event.key == pygame.K_q:  # Выход из игры
                     pygame.quit()
                     return
@@ -172,9 +174,11 @@ def main():
     lives = 3  # Количество жизней
     move_speed_obstacle = 10  # Скорость движения
     move_speed_penguin = 5
-    add_speed = False
-    wave_on_penguin = False
     running = True
+    id_obstacle = 0
+    old_id = []
+    last_obstacle = Obstacle(id_obstacle)
+    obstacles.append(last_obstacle)
     while running:
         clock.tick(FPS)
 
@@ -183,10 +187,10 @@ def main():
                 running = False
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
-        if keys[pygame.K_RIGHT]:  # Движение пингвина вправо
-            penguin.rect.x += move_speed_penguin
-        if keys[pygame.K_LEFT]:  # Движение пингвина влево
-            penguin.rect.x -= move_speed_penguin
+        # if keys[pygame.K_RIGHT]:  # Движение пингвина вправо
+        #     penguin.rect.x += move_speed_penguin
+        # if keys[pygame.K_LEFT]:  # Движение пингвина влево
+        #     penguin.rect.x -= move_speed_penguin
         if keys[pygame.K_DOWN]:
             penguin.animated_down()
         if keys[pygame.K_UP]:
@@ -199,8 +203,10 @@ def main():
             penguin.rect.x = SCREEN_WIDTH - penguin.rect.width
 
         # Генерация препятствий с вероятностью 2%
-        if random.randint(1, 100) < 2:
-            obstacles.append(Obstacle())
+        if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150:
+            obstacles.append(Obstacle(id_obstacle))
+            last_obstacle = obstacles[-1]
+            id_obstacle += 1
 
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
@@ -226,11 +232,13 @@ def main():
 
         # Проверка на столкновение с волной
         for obstacle in obstacles:
-            if obstacle.rect.colliderect(penguin.rect):# Проверка на столкновение
-                if penguin.sit_down and not wave_on_penguin:
-                    move_speed_penguin += 1
-                    move_speed_obstacle -= 1
-                    wave_on_penguin = True
+            if penguin.rect.colliderect(obstacle.rect):# Проверка на столкновение
+                if penguin.sit_down and obstacle.id not in old_id:
+                    old_id.append(obstacle.id)
+                    move_speed_penguin -= 1
+                    move_speed_obstacle += 1
+                elif penguin.sit_down:
+                    pass
                 else:
                     lives -= 1  # Уменьшаем количество жизней
                     obstacles.remove(obstacle)  # Удаляем столкнувшееся препятствие
@@ -240,16 +248,16 @@ def main():
                             obstacles.clear()  # Очищаем препятствия
                             score = 0  # Сбрасываем счет
                             lives = 3
-            else:
-                wave_on_penguin = False
 
         font = pygame.font.Font(None, 36)
         score_text = font.render(f'Score: {score}', True, WHITE)
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
         speed_text = font.render(f'Speed: {move_speed_penguin}', True, WHITE)
+        help_text = font.render(f'Пока только вниз', True, WHITE)
         screen.blit(score_text, (10, 10))
         screen.blit(lives_text, (10, 50))
         screen.blit(speed_text, (10, 90))
+        screen.blit(help_text, (950, 50))
         pygame.display.flip()  # Обновляем экран
 
     pygame.quit()  # Выход из игры
