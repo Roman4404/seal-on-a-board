@@ -17,19 +17,21 @@ water_image = pygame.image.load('data/water_concept.png')
 sky_image = pygame.image.load('data/sky_concept2.png')
 wave_image = pygame.image.load('data/wave.png')
 
+# Группы спрайтов
+all_sprites = pygame.sprite.Group()
+player_sprites = pygame.sprite.Group()
+waves_sprites = pygame.sprite.Group()
+cloud_sprites = pygame.sprite.Group()
 
 # Класс для пингвина
-class Penguin:
-    def __init__(self):
+class Penguin(pygame.sprite.Sprite):
+    def __init__(self, *group):
+        super().__init__(*group) # Вызываем конструктор родительского класса
         self.image = penguin_image
         self.rect = self.image.get_rect()
         self.rect.x = SCREEN_WIDTH // 2 - 100 # Начальная позиция по оси X
         self.rect.y = SCREEN_HEIGHT // 2 + 115  # Позиция по оси Y
         self.sit_down = False
-
-    def draw(self, screen, offset):
-        # Отрисовываем пингвина с учетом смещения
-        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
     def animated_down(self):
         self.image = penguin_down_image
@@ -39,22 +41,22 @@ class Penguin:
         self.image = penguin_image
         self.sit_down = False
 
+    def update(self):
+        self.rect = self.rect.move(0, 0)
 
 # Класс для препятствий
-class Obstacle:
-    def __init__(self, id_obstacle):
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self, id_obstacle, *group):
+        super().__init__(*group)
         self.image = wave_image
         self.rect = self.image.get_rect()
         self.rect.x = -SCREEN_WIDTH  # Начальная позиция волны (за левым краем экрана)
         self.rect.y = SCREEN_HEIGHT - 300  # Положение препятствия
         self.id = id_obstacle
 
-    def move(self, speed):
-        self.rect.x += speed  # Движение препятствия вправо
+    def update(self, speed):
+        self.rect = self.rect.move(speed, 0)  # Движение препятствия вправо
 
-    def draw(self, screen, offset):
-        # Отрисовываем препятствие с учетом смещения
-        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
 class Water:
     def __init__(self):
@@ -64,19 +66,22 @@ class Water:
         for x in range(0, 1280, 96):
             screen.blit(self.image, (x, SCREEN_HEIGHT - 96))
 
-class Cloud:
-    def __init__(self):
+class Cloud(pygame.sprite.Sprite):
+    def __init__(self, *group):
+        super().__init__(*group)
         self.image = cloud_image
         self.rect = self.image.get_rect()
         self.rect.x = SCREEN_WIDTH
         self.rect.y = SCREEN_HEIGHT - 500  # Положение препятствия
 
-    def move(self, speed):
-        self.rect.x -= speed  # Движение препятствия влево
+    def update(self, speed):
+        self.rect = self.rect.move(-speed, 0)
+    # def move(self, speed):
+    #     self.rect.x -= speed  # Движение препятствия влево
 
-    def draw(self, screen, offset):
-        # Отрисовываем препятствие с учетом смещения
-        screen.blit(self.image, (self.rect.x + offset, self.rect.y))
+    # def draw(self, screen, offset):
+    #     # Отрисовываем препятствие с учетом смещения
+    #     screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
 # Занимается небом
 class Sky:
@@ -90,13 +95,15 @@ class Sky:
 
     def draw_cloud(self, screen):
         if random.randint(1, 100) < 2 and len(self.clouds) < 4:
-            self.clouds.append(Cloud())
+            self.clouds.append(Cloud(cloud_sprites))
+
+        cloud_sprites.update(5)
+        cloud_sprites.draw(screen)
 
         for cloud in self.clouds:
-            cloud.move(5)  # Двигаем препятствия влево
-            cloud.draw(screen, 0)  # Отрисовываем препятствия с учетом смещения
             if cloud.rect.x < 0:  # Удаление облака, вышедших за экран
                 self.clouds.remove(cloud)
+
 
 # Функция для отображения заставки
 def show_start_screen(screen):
@@ -166,7 +173,7 @@ def main():
     pygame.display.set_caption("Seal on a Board")
     clock = pygame.time.Clock()
 
-    penguin = Penguin()
+    penguin = Penguin(player_sprites)
     water = Water()
     sky = Sky()
     obstacles = []
@@ -177,7 +184,7 @@ def main():
     running = True
     id_obstacle = 0
     old_id = []
-    last_obstacle = Obstacle(id_obstacle)
+    last_obstacle = Obstacle(id_obstacle, waves_sprites)
     obstacles.append(last_obstacle)
     while running:
         clock.tick(FPS)
@@ -204,26 +211,18 @@ def main():
 
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150:
-            obstacles.append(Obstacle(id_obstacle))
+            obstacles.append(Obstacle(id_obstacle, waves_sprites))
             last_obstacle = obstacles[-1]
             id_obstacle += 1
 
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
-        penguin.draw(screen, 0)  # Отрисовываем пингвина без смещения
-
-        # if not wave_on_penguin and add_speed:
-        #     move_speed_penguin += 1
-        #     move_speed_obstacle -= move_speed_penguin
-        #     add_speed = False
-        # elif wave_on_penguin:
-        #     add_speed = True
+        player_sprites.draw(screen)
+        waves_sprites.update(move_speed_obstacle)
+        waves_sprites.draw(screen)
 
         # Отрисовка препятствий
         for obstacle in obstacles:
-            obstacle.move(move_speed_obstacle)  # Двигаем препятствия влево
-            obstacle.draw(screen, 0)  # Отрисовываем препятствия без смещения
-
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
                 obstacles.remove(obstacle)
                 score += 1
@@ -236,7 +235,7 @@ def main():
                 if penguin.sit_down and obstacle.id not in old_id:
                     old_id.append(obstacle.id)
                     move_speed_penguin -= 1
-                    move_speed_obstacle += 1
+                    move_speed_obstacle += 10
                 elif penguin.sit_down:
                     pass
                 else:
@@ -244,7 +243,7 @@ def main():
                     obstacles.remove(obstacle)  # Удаляем столкнувшееся препятствие
                     if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
                         if show_game_over_screen(screen, score):
-                            penguin = Penguin()  # Перезапускаем игру
+                            penguin = Penguin(player_sprites)  # Перезапускаем игру
                             obstacles.clear()  # Очищаем препятствия
                             score = 0  # Сбрасываем счет
                             lives = 3
