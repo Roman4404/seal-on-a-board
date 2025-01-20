@@ -1,6 +1,11 @@
+from tokenize import group
+
 import pygame
 import random
 import os
+import time
+
+from Tools.scripts.pindent import start
 
 pygame.init()
 SCREEN_WIDTH = 1280
@@ -15,7 +20,8 @@ penguin_down_image = pygame.image.load('data/Pingein_concept2_animated _down_pla
 cloud_image = pygame.image.load('data/cloud1.png')
 water_image = pygame.image.load('data/water_concept.png')
 sky_image = pygame.image.load('data/sky_concept2.png')
-wave_image = pygame.image.load('data/wave.png')
+big_wave_image = pygame.image.load('data/wave.png')
+small_wave_image = pygame.image.load('data/small_wave.png')
 
 # Группы спрайтов
 all_sprites = pygame.sprite.Group()
@@ -45,17 +51,19 @@ class Penguin(pygame.sprite.Sprite):
         self.rect = self.rect.move(0, 0)
 
 # Класс для препятствий
-class Obstacle(pygame.sprite.Sprite):
-    def __init__(self, id_obstacle, *group):
+class Wave(pygame.sprite.Sprite):
+    def __init__(self, id_obstacle, image, type_wave, x=-SCREEN_WIDTH, y=SCREEN_HEIGHT - 300, *group):
         super().__init__(*group)
-        self.image = wave_image
+        self.image = image
         self.rect = self.image.get_rect()
-        self.rect.x = -SCREEN_WIDTH  # Начальная позиция волны (за левым краем экрана)
-        self.rect.y = SCREEN_HEIGHT - 300  # Положение препятствия
+        self.rect.x = x  # Начальная позиция волны (за левым краем экрана)
+        self.rect.y = y  # Положение препятствия
         self.id = id_obstacle
+        self.type = type_wave # Маленькая волна = "small_wave", Большая волна = "big_wave"
 
     def update(self, speed):
         self.rect = self.rect.move(speed, 0)  # Движение препятствия вправо
+
 
 
 class Water:
@@ -76,12 +84,6 @@ class Cloud(pygame.sprite.Sprite):
 
     def update(self, speed):
         self.rect = self.rect.move(-speed, 0)
-    # def move(self, speed):
-    #     self.rect.x -= speed  # Движение препятствия влево
-
-    # def draw(self, screen, offset):
-    #     # Отрисовываем препятствие с учетом смещения
-    #     screen.blit(self.image, (self.rect.x + offset, self.rect.y))
 
 # Занимается небом
 class Sky:
@@ -184,7 +186,12 @@ def main():
     running = True
     id_obstacle = 0
     old_id = []
-    last_obstacle = Obstacle(id_obstacle, waves_sprites)
+    direction = 1
+    x_pos = -140
+    start_time = time.time()
+    distance_between_waves_balance = SCREEN_WIDTH
+    max_speed = 0
+    last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", x_pos, SCREEN_HEIGHT - 300, waves_sprites)
     obstacles.append(last_obstacle)
     while running:
         clock.tick(FPS)
@@ -209,53 +216,88 @@ def main():
         if penguin.rect.x > SCREEN_WIDTH - penguin.rect.width:
             penguin.rect.x = SCREEN_WIDTH - penguin.rect.width
 
+        if move_speed_obstacle < move_speed_penguin:
+            direction = -1
+            x_pos = SCREEN_WIDTH - 100
+            distance_between_waves_balance = 1280
+        else:
+            direction = 1
+            x_pos = -140
+            distance_between_waves_balance = 0
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        if elapsed_time > 10:
+            if move_speed_obstacle < move_speed_penguin:
+                move_speed_obstacle += 4
+            else:
+                move_speed_obstacle += 2
+            start_time = time.time()
+
         # Генерация препятствий с вероятностью 2%
-        if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150:
-            obstacles.append(Obstacle(id_obstacle, waves_sprites))
+        if random.randint(1, 100) < 2 and abs(last_obstacle.rect.x - distance_between_waves_balance) > 200:
+            type_wave_num = random.randint(0, 1)
+            if type_wave_num == 0:
+                obstacles.append(Wave(id_obstacle, big_wave_image, "big_wave", x_pos, SCREEN_HEIGHT - 300, waves_sprites))
+            elif type_wave_num == 1:
+                print(x_pos)
+                obstacles.append(Wave(id_obstacle, small_wave_image, "small_wave", x_pos, SCREEN_HEIGHT - 280, waves_sprites))
             last_obstacle = obstacles[-1]
             id_obstacle += 1
 
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
         player_sprites.draw(screen)
-        waves_sprites.update(move_speed_obstacle)
+        waves_sprites.update(move_speed_obstacle * direction)
         waves_sprites.draw(screen)
 
         # Отрисовка препятствий
-        for obstacle in obstacles:
-            if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
+        for obstacle in waves_sprites:
+            if obstacle.rect.x > SCREEN_WIDTH or obstacle.rect.x < -199:  # Удаление препятствий, вышедших за экран
                 obstacles.remove(obstacle)
+                waves_sprites.remove(obstacle)
                 score += 1
 
         water.draw(screen)  # Прорисовываем воду
 
         # Проверка на столкновение с волной
-        for obstacle in obstacles:
+        for obstacle in waves_sprites:
             if penguin.rect.colliderect(obstacle.rect):# Проверка на столкновение
-                if penguin.sit_down and obstacle.id not in old_id:
-                    old_id.append(obstacle.id)
-                    move_speed_penguin -= 1
-                    move_speed_obstacle += 10
-                elif penguin.sit_down:
-                    pass
-                else:
-                    lives -= 1  # Уменьшаем количество жизней
-                    obstacles.remove(obstacle)  # Удаляем столкнувшееся препятствие
-                    if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
-                        if show_game_over_screen(screen, score):
-                            penguin = Penguin(player_sprites)  # Перезапускаем игру
-                            obstacles.clear()  # Очищаем препятствия
-                            score = 0  # Сбрасываем счет
-                            lives = 3
+                if obstacle.type == "big_wave":
+                    if penguin.sit_down and obstacle.id not in old_id:
+                        old_id.append(obstacle.id)
+                        move_speed_penguin -= 1
+                        move_speed_obstacle += 1
+                    elif penguin.sit_down:
+                        pass
+                    else:
+                        lives -= 1  # Уменьшаем количество жизней
+                        obstacles.remove(obstacle)
+                        waves_sprites.remove(obstacle)# Удаляем столкнувшееся препятствие
+                        if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
+                            if show_game_over_screen(screen, score):
+                                penguin = Penguin(player_sprites)  # Перезапускаем игру
+                                obstacles.clear()  # Очищаем препятствия
+                                score = 0  # Сбрасываем счет
+                                lives = 3
+                elif obstacle.type == "small_wave":
+                    if obstacle.id not in old_id:
+                        old_id.append(obstacle.id)
+                        move_speed_penguin += 3
+
 
         font = pygame.font.Font(None, 36)
         score_text = font.render(f'Score: {score}', True, WHITE)
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
         speed_text = font.render(f'Speed: {move_speed_penguin}', True, WHITE)
+        speed_wave_text = font.render(f'Speed wave:{move_speed_obstacle}', True, WHITE)
+        time_text = font.render(f'Time:{str(elapsed_time)}', True, WHITE)
         help_text = font.render(f'Пока только вниз', True, WHITE)
         screen.blit(score_text, (10, 10))
         screen.blit(lives_text, (10, 50))
         screen.blit(speed_text, (10, 90))
+        screen.blit(speed_wave_text, (10, 130))
+        screen.blit(time_text, (10, 170))
         screen.blit(help_text, (950, 50))
         pygame.display.flip()  # Обновляем экран
 
