@@ -5,14 +5,13 @@ import random
 import os
 import time
 
-from Tools.scripts.pindent import start
-
 pygame.init()
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
 FPS = 60
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
+screen_rect = (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
 # Загрузка изображений
 penguin_image = pygame.image.load('data/Pingein_player2.png')
@@ -109,6 +108,36 @@ class Sky:
             if cloud.rect.x < 0:  # Удаление облака, вышедших за экран
                 self.clouds.remove(cloud)
 
+class Particle(pygame.sprite.Sprite):
+    # сгенерируем частицы разного размера
+    fire = [pygame.image.load("data/water_particle.png")]
+    for scale in (20, 20, 20):
+        fire.append(pygame.transform.scale(fire[0], (scale, scale)))
+
+    def __init__(self, pos, dx, dy):
+        super().__init__(all_sprites)
+        self.image = random.choice(self.fire)
+        self.rect = self.image.get_rect()
+
+        # у каждой частицы своя скорость — это вектор
+        self.velocity = [10, dy]
+        # и свои координаты
+        self.rect.x, self.rect.y = pos
+
+        # гравитация будет одинаковой (значение константы)
+        self.gravity = -0.4
+
+    def update(self):
+        # применяем гравитационный эффект:
+        # движение с ускорением под действием гравитации
+        self.velocity[1] += self.gravity
+        # перемещаем частицу
+        self.rect.x -= self.velocity[0]
+        self.rect.y += self.velocity[1]
+        # убиваем, если частица ушла за экран
+        if not self.rect.colliderect(screen_rect):
+            self.kill()
+
 
 # Функция для отображения заставки
 def show_start_screen(screen):
@@ -172,6 +201,14 @@ def show_game_over_screen(screen, score):
                     pygame.quit()
                     return
 
+def create_particles(position):
+    # количество создаваемых частиц
+    particle_count = 20
+    # возможные скорости
+    numbers = range(-5, 6)
+    for _ in range(particle_count):
+        Particle(position, random.choice(numbers), random.choice(numbers))
+
 # Основная функция игры
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -201,6 +238,9 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # создаём частицы по щелчку мыши
+                create_particles(pygame.mouse.get_pos())
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
         # if keys[pygame.K_RIGHT]:  # Движение пингвина вправо
@@ -253,6 +293,8 @@ def main():
         player_sprites.draw(screen)
         waves_sprites.update(move_speed_obstacle)
         waves_sprites.draw(screen)
+        all_sprites.update()
+        all_sprites.draw(screen)
 
         # Отрисовка препятствий
         for obstacle in waves_sprites:
