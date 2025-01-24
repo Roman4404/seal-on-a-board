@@ -121,17 +121,18 @@ class Sky:
                 self.clouds.remove(cloud)
 
 # Частицы воды(Сырая)
-class Particle(pygame.sprite.Sprite):
+class Particle_Water(pygame.sprite.Sprite):
     # сгенерируем частицы разного размера
-    fire = [pygame.image.load("data/water_particle.png")]
+    fire = [pygame.image.load("data/water_particle.png")] # Исходное размер текстуры
+    # Разные размер текстур
     for scale in (3, 6, 9):
         fire.append(pygame.transform.scale(fire[0], (scale, scale)))
 
     def __init__(self, pos, dx, dy, penguin):
         super().__init__(all_sprites)
-        self.image = random.choice(self.fire)
-        self.rect = self.image.get_rect()
-        self.penguin = penguin
+        self.image = random.choice(self.fire) # Изображение
+        self.rect = self.image.get_rect() # Размеры
+        self.penguin = penguin # Пингвин (нужен для получения координат)
 
         # у каждой частицы своя скорость — это вектор
         self.velocity = [dx, dy]
@@ -222,7 +223,7 @@ def create_particles(position, penguin):
     # возможные скорости
     numbers = range(2, 10)
     for _ in range(particle_count):
-        Particle(position, random.choice(numbers), random.choice(numbers), penguin)
+        Particle_Water(position, random.choice(numbers), random.choice(numbers), penguin)
 
 # Основная функция игры
 def main():
@@ -309,6 +310,7 @@ def main():
         all_sprites.update() # Местоположение всех спрайтов
         all_sprites.draw(screen) # Прорисовываем все спрайты
 
+        # Спавн брызгов вероятность от 5% до 10%
         if random.randint(1, 100) < 10 * water_particle_coefficient:
             create_particles((penguin.rect.x - 10, penguin.rect.y + penguin.rect.width + 10), penguin)
 
