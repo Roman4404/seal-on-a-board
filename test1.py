@@ -163,6 +163,42 @@ class Sky:
             if cloud.rect.x < 0:  # Удаление облака, вышедших за экран
                 self.clouds.remove(cloud)
 
+
+# Частицы воды(Сырая)
+class Particle_Water(pygame.sprite.Sprite):
+    # сгенерируем частицы разного размера
+    fire = [pygame.image.load("data/water_particle.png")] # Исходное размер текстуры
+    # Разные размер текстур
+    for scale in (3, 6, 9):
+        fire.append(pygame.transform.scale(fire[0], (scale, scale)))
+
+    def __init__(self, pos, dx, dy, penguin):
+        super().__init__(all_sprites)
+        self.image = random.choice(self.fire) # Изображение
+        self.rect = self.image.get_rect() # Размеры
+        self.penguin = penguin # Пингвин (нужен для получения координат)
+
+        # у каждой частицы своя скорость — это вектор
+        self.velocity = [dx, dy]
+        # и свои координаты
+        self.rect.x, self.rect.y = pos
+
+        # гравитация будет одинаковой (значение константы)
+        self.gravity = -0.4
+
+    def update(self):
+        # применяем гравитационный эффект:
+        # движение с ускорением под действием гравитации
+        self.velocity[1] += self.gravity
+        # перемещаем частицу
+        self.rect.x -= self.velocity[0]
+        self.rect.y += self.velocity[1]
+
+        # убиваем, если частица ушла за экран
+        if not self.rect.colliderect((self.penguin.rect.x - self.penguin.rect.width, self.penguin.rect.y + 110, self.penguin.rect.x, self.penguin.rect.y)):
+            self.kill()
+
+
 def show_loading_screen(screen):
     font = pygame.font.Font(None, 74)
     loading_text = font.render("Loading...", True, WHITE)
@@ -279,6 +315,14 @@ def show_game_over_screen(screen, score):
                     pygame.quit()
                     return
 
+def create_particles(position, penguin):
+    # количество создаваемых частиц
+    particle_count = 20
+    # возможные скорости
+    numbers = range(2, 10)
+    for _ in range(particle_count):
+        Particle_Water(position, random.choice(numbers), random.choice(numbers), penguin)
+
 # Основная функция игры
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -305,6 +349,7 @@ def main():
     on_wave = False
     last_bird_spawn_time = pygame.time.get_ticks()  # Время последнего спавна птицы
     bird_spawn_interval = random.randint(10000, 20000)
+    water_particle_coefficient = 0.5 + move_speed_penguin // 10  # Коэффициент брызгов зависит от скорости пингвина и от того что он на волне или нет
     while running:
         clock.tick(FPS)
 
@@ -377,6 +422,10 @@ def main():
         bird_sprites.update()  # Обновляем птиц
         bird_sprites.draw(screen)
 
+        # Спавн брызгов вероятность от 5% до 10%
+        if random.randint(1, 100) < 10 * water_particle_coefficient:
+            create_particles((penguin.rect.x - 10, penguin.rect.y + penguin.rect.width + 10), penguin)
+
         # Отрисовка препятствий
         for obstacle in waves_sprites:
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
@@ -400,6 +449,7 @@ def main():
         for obstacle in waves_sprites:
             if penguin.rect.colliderect(obstacle.rect):# Проверка на столкновение
                 on_wave = True
+                water_particle_coefficient = 1 + move_speed_penguin // 10
                 if obstacle.type == "big_wave":
                     if penguin.sit_down and obstacle.id not in old_id:
                         old_id.append(obstacle.id)
@@ -437,6 +487,7 @@ def main():
                             start_time = time.time()
 
             else:
+                water_particle_coefficient = 0.5 + move_speed_penguin // 10
                 on_wave = False
 
 
