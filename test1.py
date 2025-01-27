@@ -80,6 +80,11 @@ class Penguin(pygame.sprite.Sprite):
         self.velocity_y = 0  # Вертикальная скорость
         self.is_catching_bird = False  # Новое состояние для захвата птицы
         self.catch_start_time = 0  # Время начала захвата
+        # Энергия
+        self.max_energy = 100  # Максимальная энергия
+        self.current_energy = self.max_energy  # Текущая энергия
+        self.energy_recovery_rate = self.max_energy / 22  # Восстановление энергии в секунду
+        self.last_energy_update_time = pygame.time.get_ticks()  # Время последнего обновления энергии
 
     def animated_down(self):
         self.image = penguin_down_image
@@ -112,6 +117,15 @@ class Penguin(pygame.sprite.Sprite):
 
     def update(self):
         self.rect = self.rect.move(0, 0)
+
+        # Восстановление энергии
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_energy_update_time >= 1000:  # Каждую секунду
+            if self.current_energy < self.max_energy:
+                self.current_energy += self.energy_recovery_rate
+                if self.current_energy > self.max_energy:
+                    self.current_energy = self.max_energy
+            self.last_energy_update_time = current_time
 
         # Проверка на захват птицы
         if self.is_catching_bird:
@@ -226,6 +240,28 @@ class Particle_Water(pygame.sprite.Sprite):
                                       self.penguin.rect.x, self.penguin.rect.y)):
             self.kill()
 
+def draw_energy_bar(screen, penguin):
+    bar_width = 300
+    bar_height = 20
+    energy_ratio = penguin.current_energy / penguin.max_energy
+    # Создаем прозрачный фон
+    bar_background = pygame.Surface((bar_width, bar_height), pygame.SRCALPHA)
+    # Рисуем фон прогресс-бара
+    pygame.draw.rect(bar_background, (255, 0, 0, 128), (0, 0, bar_width, bar_height))  # Полупрозрачный фон
+    # Рисуем прогресс-бар
+    pygame.draw.rect(bar_background, (0, 255, 0), (0, 0, bar_width * energy_ratio, bar_height))  # Энергия
+    # Переливающийся цвет
+    if energy_ratio > 0.67:
+        border_color = (255, 255, 255)  # Белый, если больше 67%
+    elif energy_ratio > 0.33:
+        border_color = (0, 0, 255)  # Синий, если между 33% и 67%
+    else:
+        border_color = (255, 0, 0)  # Красный, если меньше 33%
+
+    # Рисуем обводку с изменяющимся цветом
+    pygame.draw.rect(screen, border_color, (10, 250, bar_width, bar_height), 2)  # Обводка
+    # Рисуем прогресс-бар на экране
+    screen.blit(bar_background, (10, 250))  # Отображаем прогресс-бар
 
 def show_loading_screen(screen):
     font = pygame.font.Font(None, 74)
@@ -282,7 +318,6 @@ def show_loading_screen(screen):
 
     time.sleep(1)
 
-
 # Функция для отображения заставки
 def show_start_screen(screen):
     font = pygame.font.Font(None, 74)
@@ -314,17 +349,14 @@ def show_start_screen(screen):
                     pygame.quit()
                     return
 
-
 # Функция для отображения диалогового окна
 def show_game_over_screen(screen, score):
     font = pygame.font.Font(None, 74)
     text = font.render("Game Over", True, WHITE)
     text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-
     font_small = pygame.font.Font(None, 36)
     score_text = font_small.render(f"Your Score: {score}", True, WHITE)
     score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-
     restart_text = font_small.render("Press R to Restart or Q to Quit", True, WHITE)
     restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
 
@@ -346,7 +378,6 @@ def show_game_over_screen(screen, score):
                     pygame.quit()
                     return
 
-
 def create_particles(position, penguin):
     # количество создаваемых частиц
     particle_count = 20
@@ -354,7 +385,6 @@ def create_particles(position, penguin):
     numbers = range(2, 10)
     for _ in range(particle_count):
         Particle_Water(position, random.choice(numbers), random.choice(numbers), penguin)
-
 
 # Основная функция игры
 def main():
@@ -392,9 +422,10 @@ def main():
                 running = False
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
-        if keys[pygame.K_UP] and not penguin.is_jumping:  # Прыжок при нажатии пробела
+        if keys[pygame.K_UP] and not penguin.is_jumping and penguin.current_energy >= 33:  # Прыжок при нажатии пробела
             penguin.is_jumping = True
             penguin.velocity_y = -penguin.jump_height  # Устанавливаем начальную скорость прыжка
+            penguin.current_energy -= 33  # Уменьшаем энергию на 33%
         if keys[pygame.K_DOWN]:
             penguin.animated_down()
         else:
@@ -453,6 +484,7 @@ def main():
         waves_sprites.draw(screen)
         bird_sprites.update()  # Обновляем птиц
         bird_sprites.draw(screen)
+        draw_energy_bar(screen, penguin)
 
         # Спавн брызгов вероятность от 5% до 10%
         if random.randint(1, 100) < 10 * water_particle_coefficient:
