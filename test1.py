@@ -377,7 +377,7 @@ def main():
     old_id = []
     start_time = time.time()
     wave_time = time.time()
-    last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 300, waves_sprites)
+    last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
     obstacles.append(last_obstacle)
     add_wave = False
     on_wave = False
@@ -406,6 +406,23 @@ def main():
         if penguin.rect.x > SCREEN_WIDTH - penguin.rect.width:
             penguin.rect.x = SCREEN_WIDTH - penguin.rect.width
 
+        end_time = time.time()  # Время сейчас для всех
+        wave_end_time = time.time()  # Время сейчас для волны
+        elapsed_time = end_time - start_time  # Сколько времени прошло со времени засечки для всех
+        wave_elapsed_time = wave_end_time - wave_time  # Сколько времени прошло со времени засечки для волны
+        if elapsed_time > 3 and 10 < move_speed_penguin:
+            move_speed_penguin -= 2
+            move_speed_obstacle += 2
+            start_time = time.time()
+        elif elapsed_time > 7:
+            move_speed_penguin -= 2
+            move_speed_obstacle += 2
+            start_time = time.time()
+
+        if wave_elapsed_time > 5:
+            add_wave = True
+            wave_time = time.time()
+
         # Обновление состояния пингвина
         penguin.update()
 
@@ -415,7 +432,7 @@ def main():
             type_wave_num = random.randint(0, 100)
             if type_wave_num <= 10:  # 10% Вероятность
                 obstacles.append(
-                    Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 400, waves_sprites))
+                    Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites))
             elif 11 <= type_wave_num < 100:  # 90% Вероятность
                 obstacles.append(Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280,
                                       waves_sprites))
@@ -513,20 +530,22 @@ def main():
                             start_time = time.time()
 
             else:
-                water_particle_coefficient = 0.5 + move_speed_penguin // 10
                 on_wave = False
+                water_particle_coefficient = 0.5 + move_speed_penguin // 10
 
         font = pygame.font.Font(None, 36)
         score_text = font.render(f'Score: {score}', True, WHITE)
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
         speed_text = font.render(f'Speed: {move_speed_penguin}', True, WHITE)
         speed_wave_text = font.render(f'Speed wave:{move_speed_obstacle}', True, WHITE)
+        time_wave_text = font.render(f'Time:{wave_elapsed_time}', True, WHITE)
         high_score_text = font.render(f'High Score: {high_score}', True, WHITE)  # Отображение наивысшего балла
         help_text = font.render(f'Пока только вниз', True, WHITE)
         screen.blit(score_text, (10, 10))
         screen.blit(lives_text, (10, 50))
         screen.blit(speed_text, (10, 90))
         screen.blit(speed_wave_text, (10, 130))
+        screen.blit(time_wave_text, (10, 170))
         screen.blit(high_score_text, (10, 210))  # Отображаем наивысший балл ниже других текстов
         screen.blit(help_text, (950, 50))
         pygame.display.flip()  # Обновляем экран
