@@ -70,6 +70,8 @@ big_wave_image = pygame.image.load('data/wave.png')
 small_wave_image = pygame.image.load('data/small_wave.png')
 down_kant_image = pygame.image.load('data/Pingein_concept_animated_down_kant_player.png')
 bird_image = pygame.image.load('data/bird_concept.png')
+seal_image = pygame.image.load('data/kotik.png')
+seal_damag = pygame.image.load('data/kotik_damag.png')
 
 # Группы спрайтов
 all_sprites = pygame.sprite.Group()
@@ -77,6 +79,7 @@ player_sprites = pygame.sprite.Group()
 waves_sprites = pygame.sprite.Group()
 cloud_sprites = pygame.sprite.Group()
 bird_sprites = pygame.sprite.Group()
+seals_sprites = pygame.sprite.Group()
 
 
 # Класс для пингвина
@@ -212,6 +215,24 @@ class Bird(pygame.sprite.Sprite):
 
         # Удаление птицы, если она вышла за экран
         if self.rect.x < -self.rect.width:
+            self.kill()
+
+
+class Seal(pygame.sprite.Sprite):
+    def __init__(self, *group):
+        super().__init__(*group)
+        self.image = seal_image  # Загрузка изображения морского котика
+        self.damag_image = seal_damag
+        self.rect = self.image.get_rect()
+        self.rect.x = -self.rect.width  # Начальная позиция по оси X
+        self.rect.y = SCREEN_HEIGHT - 200  # Положение по оси Y (можно настроить)
+        self.is_damaged = False
+
+    def update(self, speed):
+        if self.is_damaged:
+            self.image = self.damag_image  # Изменяем изображение на поврежденное
+        self.rect.x += speed  # Движение морского котика вправо
+        if self.rect.x > SCREEN_WIDTH:  # Удаление морского котика, вышедшего за экран
             self.kill()
 
 
@@ -375,8 +396,7 @@ def show_pause_menu(screen):
     exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
 
     while True:
-        # Не заливаем фон, чтобы он оставался полностью прозрачным
-        screen.fill((0, 0, 0, 0))  # Убедитесь, что вы используете прозрачный цвет, если ваша версия Pygame это поддерживает
+        screen.fill((0, 0, 0, 0))  # Убедитесь, что вы используете прозрачный цвет
         screen.blit(pause_text, pause_rect)
 
         # Рисуем скругленные прямоугольники вокруг текста
@@ -400,8 +420,6 @@ def show_pause_menu(screen):
                 if resume_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Продолжить"
                     return "resume"  # Продолжаем игру
                 if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Рестарт"
-                    global obstacles
-                    obstacles = []  # Очищаем список препятствий
                     reset_game()  # Полный перезапуск игры
                     return  # Возвращаемся в основной игровой цикл
                 if settings_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Настройки"
@@ -609,7 +627,7 @@ def create_particles(position, penguin):
 def reset_game():
     global penguin, obstacles, score, lives, move_speed_obstacle, move_speed_penguin, id_obstacle, old_id, start_time, wave_time
     penguin = Penguin(player_sprites)
-    obstacles.clear()
+    obstacles.clear()  # Очищаем список препятствий
     score = 0
     lives = 3  # Количество жизней
     move_speed_obstacle = 12  # Скорость движения
@@ -623,6 +641,8 @@ def reset_game():
 
 # Основная функция игры
 def main():
+    global obstacles  # Объявляем переменную как глобальную
+    obstacles = []
     init_db()  # Инициализация базы данных
     volume = load_settings()  # Загружаем настройки
     pygame.mixer.music.set_volume(volume)  # Установка громкости музыки
@@ -652,6 +672,8 @@ def main():
     obstacles.append(last_obstacle)
     add_wave = False
     on_wave = False
+    last_seal_spawn_time = pygame.time.get_ticks()  # Время последнего спавна морского котика
+    seal_spawn_interval = random.randint(7000, 23000)
     last_bird_spawn_time = pygame.time.get_ticks()  # Время последнего спавна птицы
     bird_spawn_interval = random.randint(10000, 20000)
     water_particle_coefficient = 0.5 + move_speed_penguin // 10  # Коэффициент брызгов зависит от скорости пингвина и от того что он на волне или нет
@@ -731,13 +753,23 @@ def main():
             last_bird_spawn_time = current_time  # Обновляем время последнего спавна
             bird_spawn_interval = random.randint(10000, 20000)
 
+        # Проверка времени для спавна морского котика
+        current_time = pygame.time.get_ticks()
+        if current_time - last_seal_spawn_time > seal_spawn_interval:
+            Seal(seals_sprites)  # Создаем нового морского котика
+            last_seal_spawn_time = current_time  # Обновляем время последнего спавна
+            seal_spawn_interval = random.randint(7000, 23000)  # Устанавливаем новый интервал
+
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
         player_sprites.draw(screen)
         waves_sprites.update(move_speed_obstacle)
         waves_sprites.draw(screen)
         bird_sprites.update()  # Обновляем птиц
+        seals_sprites.update(move_speed_penguin)  # Обновляем морских котиков, чтобы они плыли за пингвином
+        seals_sprites.draw(screen)  # Отрисовываем морских котиков
         bird_sprites.draw(screen)
+
         draw_energy_bar(screen, penguin)
 
         # Спавн брызгов вероятность от 5% до 10%
@@ -769,6 +801,19 @@ def main():
                     high_score = score  # Обновляем переменную high_score
                     update_high_score(high_score)  # Обновляем наивысший балл в базе данных
                 break  # Выходим из цикла, чтобы не обрабатывать другие птицы
+
+        # Проверка на столкновение с морскими котиками
+        for seal in seals_sprites:
+            if penguin.rect.colliderect(seal.rect):  # Проверка на столкновение
+                lives -= 1  # Уменьшаем количество жизней
+                seal.is_damaged = True  # Устанавливаем состояние поврежденного морского котика
+                if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
+                    if score > high_score:  # Если текущий счет больше наивысшего
+                        update_high_score(score)  # Обновляем наивысший балл
+                        high_score = score  # Обновляем переменную high_score
+                    if show_game_over_screen(screen, score):
+                        reset_game()  # Перезапускаем игру
+                break  # Выходим из цикла, чтобы не обрабатывать других
 
         # Проверка на столкновение с волной
         for obstacle in waves_sprites:
