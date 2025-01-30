@@ -2,6 +2,7 @@ import pygame
 import random
 import time
 import sqlite3
+import json
 
 
 # Функция для инициализации базы данных
@@ -20,14 +21,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 def update_high_score(new_high_score):
     conn = sqlite3.connect('highscore.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE scores SET high_score = ? WHERE id = 1', (new_high_score,))
     conn.commit()
     conn.close()
-
 
 def get_high_score():
     conn = sqlite3.connect('highscore.db')
@@ -37,6 +36,20 @@ def get_high_score():
     conn.close()
     return high_score
 
+def save_settings(volume, brightness):
+    settings = {
+        'volume': volume
+    }
+    with open('settings.json', 'w') as f:
+        json.dump(settings, f)
+
+def load_settings():
+    try:
+        with open('settings.json', 'r') as f:
+            settings = json.load(f)
+            return settings.get('volume', 0.5)  # Возвращаем значения по умолчанию
+    except (FileNotFoundError, json.JSONDecodeError):
+        return 0.5  # Возвращаем значения по умолчанию, если файл не найден или поврежден
 
 pygame.init()
 SCREEN_WIDTH = 1280
@@ -44,6 +57,8 @@ SCREEN_HEIGHT = 720
 FPS = 60
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
+BLACK = (0, 0, 0)
+paused = False  # Переменная для отслеживания состояния паузы
 
 # Загрузка изображений
 penguin_image = pygame.image.load('data/Pingein_player2.png')
@@ -73,17 +88,20 @@ class Penguin(pygame.sprite.Sprite):
         self.rect.x = SCREEN_WIDTH // 2 - 100  # Начальная позиция по оси X
         self.start_y = SCREEN_HEIGHT // 2 + 115  # Позиция по оси Y
         self.rect.y = self.start_y
+        self.initial_x = self.rect.x  # Сохраняем начальную позицию
         self.sit_down = False
         self.is_jumping = False  # Состояние прыжка
-        self.jump_height = 22 # Высота прыжка
+        self.jump_height = 22  # Высота прыжка
         self.gravity = 1  # Гравитация
         self.velocity_y = 0  # Вертикальная скорость
         self.is_catching_bird = False  # Новое состояние для захвата птицы
         self.catch_start_time = 0  # Время начала захвата
+        self.hanging = False  # Новое состояние для зависания
+        self.hang_start_time = 0  # Время начала зависания
         # Энергия
         self.max_energy = 100  # Максимальная энергия
         self.current_energy = self.max_energy  # Текущая энергия
-        self.energy_recovery_rate = self.max_energy / 22  # Восстановление энергии в секунду
+        self.energy_recovery_rate = self.max_energy / 22  # Вос становление энергии в секунду
         self.last_energy_update_time = pygame.time.get_ticks()  # Время последнего обновления энергии
 
     def animated_down(self):
@@ -116,6 +134,13 @@ class Penguin(pygame.sprite.Sprite):
                 self.rect.y += self.velocity_y
 
     def update(self):
+        if self.hanging:
+            if pygame.time.get_ticks() - self.hang_start_time >= 1000:  # 1 секунда
+                self.hanging = False  # Завершаем зависание
+                self.rect.y = self.start_y  # Возвращаем на начальную высоту
+            return  # Прерываем обновление, чтобы не изменять позицию
+
+        # Остальная логика обновления
         self.rect = self.rect.move(0, 0)
 
         # Восстановление энергии
@@ -127,14 +152,7 @@ class Penguin(pygame.sprite.Sprite):
                     self.current_energy = self.max_energy
             self.last_energy_update_time = current_time
 
-        # Проверка на захват птицы
-        if self.is_catching_bird:
-            current_time = pygame.time.get_ticks()
-            if current_time - self.catch_start_time >= 1000:  # 1 секунда
-                self.is_catching_bird = False
-                self.rect.y = self.start_y  # Приземление пингвина
-        else:
-            self.jump()  # Обновляем состояние прыжка
+        self.jump()  # Обновляем состояние прыжка
 
 
 # Класс для препятствий
@@ -175,15 +193,25 @@ class Cloud(pygame.sprite.Sprite):
 
 class Bird(pygame.sprite.Sprite):
     def __init__(self, *group):
-        super().__init__(*group)  # Добавляем птицу в переданную группу
+        super().__init__(*group)
         self.image = bird_image
         self.rect = self.image.get_rect()
         self.rect.x = SCREEN_WIDTH  # Начальная позиция по оси X
         self.rect.y = SCREEN_HEIGHT - 480
+        self.caught = False  # Новое состояние для отслеживания, поймана ли птица
+        self.catch_time = 0  # Время, когда птица была поймана
 
     def update(self):
-        self.rect.x -= 5  # Движение птицы влево
-        if self.rect.x < -self.rect.width:  # Удаление птицы, вышедшей за экран
+        if self.caught:
+            # Если птица поймана, она остается на месте с пингвином
+            if pygame.time.get_ticks() - self.catch_time > 2000:  # 2 секунды
+                self.caught = False  # Птица улетает
+                self.rect.x -= 5  # Птица продолжает двигаться влево
+        else:
+            self.rect.x -= 5  # Движение птицы влево
+
+        # Удаление птицы, если она вышла за экран
+        if self.rect.x < -self.rect.width:
             self.kill()
 
 
@@ -262,6 +290,12 @@ def draw_energy_bar(screen, penguin):
     pygame.draw.rect(screen, border_color, (10, 250, bar_width, bar_height), 2)  # Обводка
     # Рисуем прогресс-бар на экране
     screen.blit(bar_background, (10, 250))  # Отображаем прогресс-бар
+    # Отображение текста "Jump Energy" на шкале
+    font = pygame.font.Font(None, 30)  # Создаем объект шрифта
+    jump_energy_text = font.render("JUMP ENERGY", True, BLUE)
+    # Получаем прямоугольник текста
+    text_rect = jump_energy_text.get_rect(center=(10 + bar_width // 2, 250 + bar_height // 2))
+    screen.blit(jump_energy_text, text_rect)  # Отображаем текст на шкале
 
 def show_loading_screen(screen):
     font = pygame.font.Font(None, 74)
@@ -318,34 +352,114 @@ def show_loading_screen(screen):
 
     time.sleep(1)
 
-# Функция для отображения заставки
-def show_start_screen(screen):
+def draw_rounded_rect(surface, color, rect, radius):
+    """Рисует скругленный прямоугольник."""
+    pygame.draw.rect(surface, color, rect, border_radius=radius)
+
+def show_pause_menu(screen):
     font = pygame.font.Font(None, 74)
-    title_text = font.render("Seal on a Board", True, WHITE)
-    title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+    pause_text = font.render("Paused", True, WHITE)
+    pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
 
     font_small = pygame.font.Font(None, 36)
-    play_text = font_small.render("Press P to Play", True, WHITE)
-    play_rect = play_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    resume_text = font_small.render("Продолжить", True, (0, 255, 0))
+    resume_rect = resume_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30))
 
-    exit_text = font_small.render("Press Q to Quit", True, WHITE)
-    exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+    restart_text = font_small.render("Рестарт", True, (255, 186, 0))
+    restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30))
+
+    settings_text = font_small.render("Настройки", True, (70, 120, 50))
+    settings_rect = settings_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 90))
+
+    exit_text = font_small.render("Выход", True, (255, 0, 0))
+    exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
 
     while True:
-        screen.fill(BLUE)
-        screen.blit(title_text, title_rect)
-        screen.blit(play_text, play_rect)
+        # Не заливаем фон, чтобы он оставался полностью прозрачным
+        screen.fill((0, 0, 0, 0))  # Убедитесь, что вы используете прозрачный цвет, если ваша версия Pygame это поддерживает
+        screen.blit(pause_text, pause_rect)
+
+        # Рисуем скругленные прямоугольники вокруг текста
+        draw_rounded_rect(screen, (255, 255, 255), resume_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), restart_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), settings_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), exit_rect.inflate(20, 10), 15)
+
+        screen.blit(resume_text, resume_rect)
+        screen.blit(restart_text, restart_rect)
+        screen.blit(settings_text, settings_rect)
         screen.blit(exit_text, exit_rect)
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+                return "exit"  # Возвращаем "exit" для выхода из игры
+            if event.type == pygame.MOUSEBUTTONDOWN:  # Проверка на нажатие кнопки мыши
+                mouse_pos = pygame.mouse.get_pos()  # Получаем позицию мыши
+                if resume_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Продолжить"
+                    return "resume"  # Продолжаем игру
+                if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Рестарт"
+                    global obstacles
+                    obstacles = []  # Очищаем список препятствий
+                    reset_game()  # Полный перезапуск игры
+                    return  # Возвращаемся в основной игровой цикл
+                if settings_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Настройки"
+                    show_settings_menu(screen)
+                if exit_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Выход"
+                    if show_exit_confirmation(screen):  # Показываем окно подтверждения выхода
+                        return "exit"  # Выход из игры
+            if event.type == pygame.KEYDOWN:  # Проверка на нажатие клавиши
+                if event.key == pygame.K_ESCAPE:  # Если нажата клавиша "ESC"
+                    return "resume"  # Продолжаем игру
+
+# Функция для отображения заставки
+def show_start_screen(screen):
+    font = pygame.font.Font(None, 74)
+    title_text = font.render("Seal on a Board", True, WHITE)
+    title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
+
+    font_small = pygame.font.Font(None, 36)
+    play_text = font_small.render("Играть", True, (100, 0, 255))
+    play_rect = play_text.get_rect(center=(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2))  # Кнопка "Играть" слева
+
+    exit_text = font_small.render("Выход", True, (255, 0, 0))
+    exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2 + 100, SCREEN_HEIGHT // 2))  # Кнопка "Выход" справа
+
+    settings_text = font_small.render("Настройки", True, (70, 120, 50))
+    settings_rect = settings_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))  # Кнопка "Настройки" под ними
+
+    while True:
+        screen.fill(BLUE)
+        screen.blit(title_text, title_rect)
+
+        # Рисуем скругленные прямоугольники вокруг текста
+        draw_rounded_rect(screen, (255, 255, 255), play_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), exit_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), settings_rect.inflate(20, 10), 15)
+
+        screen.blit(play_text, play_rect)
+        screen.blit(exit_text, exit_rect)
+        screen.blit(settings_text, settings_rect)
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
                 return
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if play_rect.collidepoint(mouse_pos):
+                    return
+                if exit_rect.collidepoint(mouse_pos):
+                    pygame.quit()
+                    return
+                if settings_rect.collidepoint(mouse_pos):
+                    show_settings_menu(screen)  # Переход к меню настроек
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:
-                    return  # Запускаем основную игру
-                if event.key == pygame.K_q:  # Выход из игры
+                    return
+                if event.key == pygame.K_q:
                     pygame.quit()
                     return
 
@@ -357,26 +471,132 @@ def show_game_over_screen(screen, score):
     font_small = pygame.font.Font(None, 36)
     score_text = font_small.render(f"Your Score: {score}", True, WHITE)
     score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-    restart_text = font_small.render("Press R to Restart or Q to Quit", True, WHITE)
+
+    restart_text = font_small.render("Рестарт", True, (255, 186, 0))
     restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+
+    settings_text = font_small.render("Настройки", True, (70, 120, 50))
+    settings_rect = settings_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
+
+    exit_text = font_small.render("В другой раз", True, (255, 0, 0))
+    exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100))  # Добавляем кнопку выхода
 
     while True:
         screen.fill(BLUE)
         screen.blit(text, text_rect)
         screen.blit(score_text, score_rect)
+
+        # Рисуем скругленные прямоугольники вокруг текста
+        draw_rounded_rect(screen, (255, 255, 255), restart_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), settings_rect.inflate(20, 10), 15)
+        draw_rounded_rect(screen, (255, 255, 255), exit_rect.inflate(20, 10), 15)
+
         screen.blit(restart_text, restart_rect)
+        screen.blit(settings_text, settings_rect)
+        screen.blit(exit_text, exit_rect)
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:  # Перезапуск игры
-                    return True
-                if event.key == pygame.K_q:  # Выход из игры
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Restart"
+                    reset_game()  # Полный перезапуск игры
+                    return  # Возвращаемся в основной игровой цикл
+                if settings_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Настройки"
+                    show_settings_menu(screen)
+                if exit_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Quit"
                     pygame.quit()
                     return
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:  # Если нажата клавиша "R"
+                    reset_game()  # Полный перезапуск игры
+                    return  # Возвращаемся в основной игровой цикл
+                if event.key == pygame.K_q:  # Если нажата клавиша "Q"
+                    pygame.quit()
+                    return
+
+def show_settings_menu(screen):
+    font = pygame.font.Font(None, 36)
+    volume = load_settings()  # Загружаем настройки
+
+    while True:
+        screen.fill((0, 0, 0))  # Заливка фона черным цветом
+        volume_text = font.render(f"Громкость: {int(volume * 100)}%", True, (255, 255, 255))
+
+        screen.blit(volume_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 50))
+
+        # Ползунки
+        volume_slider_rect = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 50, 200, 10)
+
+        # Отрисовка ползунков
+        pygame.draw.rect(screen, (255, 255, 255), volume_slider_rect)  # Фон ползунка громкости
+        pygame.draw.rect(screen, (0, 255, 0), (volume_slider_rect.x + int(volume * 200) - 5, volume_slider_rect.y - 5, 10, 20))  # Ползунок громкости
+
+        # Кнопка "ПРИМЕНИТЬ"
+        apply_text = font.render("ПРИМЕНИТЬ", True, (0, 255, 0))
+        apply_rect = apply_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
+        screen.blit(apply_text, apply_rect)
+
+        back_text = font.render("Назад", True, (255, 255, 255))
+        screen.blit(back_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 200))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if apply_rect.collidepoint(mouse_pos):
+                    save_settings(volume)  # Сохраняем настройки
+                    pygame.mixer.music.set_volume(volume)  # Применяем громкость
+                    continue  # Продолжаем цикл, чтобы не выходить из меню
+                if back_text.get_rect(topleft=(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 200)).collidepoint(mouse_pos):
+                    return  # Возвращаемся в предыдущее меню
+
+            if event.type == pygame.MOUSEMOTION:
+                if event.buttons[0]:  # Если нажата левая кнопка мыши
+                    if volume_slider_rect.collidepoint(event.pos):
+                        volume = (event.pos[0] - volume_slider_rect.x) / volume_slider_rect.width
+                        volume = max(0, min(volume, 1))  # Ограничиваем значение от 0 до 1
+                        pygame.mixer.music.set_volume(volume)  # Установка громкости музыки
+
+def show_exit_confirmation(screen):
+    font = pygame.font.Font(None, 36)
+    confirmation_text = font.render("Вы точно хотите выйти?", True, WHITE)
+    confirmation_rect = confirmation_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+
+    yes_text = font.render("Да", True, (0, 255, 0))
+    yes_rect = yes_text.get_rect(center=(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT // 2 + 50))
+
+    no_text = font.render("Нет", True, (255, 0, 0))
+    no_rect = no_text.get_rect(center=(SCREEN_WIDTH // 2 + 50, SCREEN_HEIGHT // 2 + 50))
+
+    while True:
+        screen.fill(BLACK)  # Заливка фона черным цветом
+        screen.blit(confirmation_text, confirmation_rect)
+        screen.blit(yes_text, yes_rect)
+        screen.blit(no_text, no_rect)
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return True  # Выход из игры
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if yes_rect.collidepoint(mouse_pos):
+                    pygame.quit()  # Закрываем игру
+                    return  # Выход из игры
+                if no_rect.collidepoint(mouse_pos):
+                    return False  # Отмена выхода, закрываем окно
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return False  # Отмена выхода
 
 def create_particles(position, penguin):
     # количество создаваемых частиц
@@ -386,14 +606,35 @@ def create_particles(position, penguin):
     for _ in range(particle_count):
         Particle_Water(position, random.choice(numbers), random.choice(numbers), penguin)
 
+def reset_game():
+    global penguin, obstacles, score, lives, move_speed_obstacle, move_speed_penguin, id_obstacle, old_id, start_time, wave_time
+    penguin = Penguin(player_sprites)
+    obstacles.clear()
+    score = 0
+    lives = 3  # Количество жизней
+    move_speed_obstacle = 12  # Скорость движения
+    move_speed_penguin = 8
+    id_obstacle = 0
+    old_id = []
+    start_time = time.time()
+    wave_time = time.time()
+    last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
+    obstacles.append(last_obstacle)
+
 # Основная функция игры
 def main():
     init_db()  # Инициализация базы данных
+    volume = load_settings()  # Загружаем настройки
+    pygame.mixer.music.set_volume(volume)  # Установка громкости музыки
     high_score = get_high_score()  # Получаем текущий наивысший балл
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Seal on a Board")
     clock = pygame.time.Clock()
     show_loading_screen(screen)
+
+    # Инициализация шрифта
+    font = pygame.font.Font(None, 36)  # Создаем объект шрифта
+
     penguin = Penguin(player_sprites)
     water = Water()
     sky = Sky()
@@ -414,12 +655,17 @@ def main():
     last_bird_spawn_time = pygame.time.get_ticks()  # Время последнего спавна птицы
     bird_spawn_interval = random.randint(10000, 20000)
     water_particle_coefficient = 0.5 + move_speed_penguin // 10  # Коэффициент брызгов зависит от скорости пингвина и от того что он на волне или нет
+    distance_traveled = 0
+
     while running:
         clock.tick(FPS)
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN:  # Проверка на нажатие клавиши
+                if event.key == pygame.K_ESCAPE:  # Если нажата клавиша "ESC"
+                    if not show_pause_menu(screen):  # Показываем меню паузы
+                        return  # Выход из игры, если пользователь выбрал "Выход"
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
         if keys[pygame.K_UP] and not penguin.is_jumping and penguin.current_energy >= 33:  # Прыжок при нажатии пробела
@@ -456,6 +702,14 @@ def main():
 
         # Обновление состояния пингвина
         penguin.update()
+
+        # Рассчитываем пройденное расстояние
+        distance_traveled += move_speed_penguin / FPS  # Увеличиваем пройденное расстояние на скорость пингвина
+        distance_traveled += move_speed_obstacle / FPS  # Увеличиваем пройденное расстояние на скорость волн
+
+        # Отображение расстояния на экране
+        distance_text = font.render(f'Distance: {distance_traveled:.1f}m', True, WHITE)
+        screen.blit(distance_text, (10, 250))  # Отображаем расстояние ниже других текстов
 
         # Генерация препятствий с вероятностью 2%
         if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150 and add_wave:
@@ -503,16 +757,17 @@ def main():
         for bird in bird_sprites:
             if (penguin.rect.x + 50 > bird.rect.x > penguin.rect.x - 50 and  # Проверка по X
                     penguin.rect.y - 50 <= bird.rect.y <= penguin.rect.y + 50):  # Проверка по Y
-                bird.kill()  # Удаляем схваченную птицу
-                score += 5  # Увеличиваем счет за схваченную птицу
+                if not bird.caught:  # Если птица еще не поймана
+                    bird.caught = True  # Устанавливаем состояние пойманной птицы
+                    bird.catch_time = pygame.time.get_ticks()  # Запоминаем время захвата
+                    penguin.hanging = True  # Устанавливаем состояние зависания пингвина
+                    penguin.hang_start_time = pygame.time.get_ticks()  # Запоминаем время начала зависания
+                    score += 5  # Увеличиваем счет за схваченную птицу
 
                 # Обновление high_score, если score больше
                 if score > high_score:
                     high_score = score  # Обновляем переменную high_score
                     update_high_score(high_score)  # Обновляем наивысший балл в базе данных
-
-                penguin.is_catching_bird = True  # Устанавливаем состояние захвата птицы
-                penguin.catch_start_time = pygame.time.get_ticks()  # Запоминаем время начала захвата
                 break  # Выходим из цикла, чтобы не обрабатывать другие птицы
 
         # Проверка на столкновение с волной
@@ -565,7 +820,7 @@ def main():
                 on_wave = False
                 water_particle_coefficient = 0.5 + move_speed_penguin // 10
 
-        font = pygame.font.Font(None, 36)
+        # Отображение других текстов
         score_text = font.render(f'Score: {score}', True, WHITE)
         lives_text = font.render(f'Lives: {lives}', True, WHITE)
         speed_text = font.render(f'Speed: {move_speed_penguin}', True, WHITE)
@@ -574,6 +829,7 @@ def main():
         high_score_text = font.render(f'High Score: {high_score}', True, WHITE)  # Отображение наивысшего балла
         help_text = font.render(f'Пока только вниз', True, WHITE)
         screen.blit(score_text, (10, 10))
+        screen.blit(distance_text, (1050, 10))
         screen.blit(lives_text, (10, 50))
         screen.blit(speed_text, (10, 90))
         screen.blit(speed_wave_text, (10, 130))
