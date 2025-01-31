@@ -4,7 +4,6 @@ import time
 import sqlite3
 import json
 
-
 # Функция для инициализации базы данных
 def init_db():
     conn = sqlite3.connect('highscore.db')
@@ -36,7 +35,7 @@ def get_high_score():
     conn.close()
     return high_score
 
-def save_settings(volume, brightness):
+def save_settings(volume):
     settings = {
         'volume': volume
     }
@@ -81,7 +80,6 @@ cloud_sprites = pygame.sprite.Group()
 bird_sprites = pygame.sprite.Group()
 seals_sprites = pygame.sprite.Group()
 
-
 # Класс для пингвина
 class Penguin(pygame.sprite.Sprite):
     def __init__(self, *group):
@@ -104,7 +102,7 @@ class Penguin(pygame.sprite.Sprite):
         # Энергия
         self.max_energy = 100  # Максимальная энергия
         self.current_energy = self.max_energy  # Текущая энергия
-        self.energy_recovery_rate = self.max_energy / 22  # Вос становление энергии в секунду
+        self.energy_recovery_rate = self.max_energy / 22  # Восстановление энергии в секунду
         self.last_energy_update_time = pygame.time.get_ticks()  # Время последнего обновления энергии
 
     def animated_down(self):
@@ -421,7 +419,7 @@ def show_pause_menu(screen):
                     return "resume"  # Продолжаем игру
                 if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Рестарт"
                     reset_game()  # Полный перезапуск игры
-                    return  # Возвращаемся в основной игровой цикл
+                    return "restart"  # Возвращаемся в основной игровой цикл
                 if settings_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Настройки"
                     show_settings_menu(screen)
                 if exit_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Выход"
@@ -626,18 +624,24 @@ def create_particles(position, penguin):
 
 def reset_game():
     global penguin, obstacles, score, lives, move_speed_obstacle, move_speed_penguin, id_obstacle, old_id, start_time, wave_time
-    penguin = Penguin(player_sprites)
+    # Удаляем старого пингвина и все спрайты
+    player_sprites.empty()  # Очищаем группу спрайтов пингвина
+    waves_sprites.empty()  # Очищаем группу спрайтов волн
+    bird_sprites.empty()  # Очищаем группу спрайтов птиц
+    seals_sprites.empty()  # Очищаем группу спрайтов морских котиков
+
+    penguin = Penguin(player_sprites)  # Создаем нового пингвина и добавляем его в группу
     obstacles.clear()  # Очищаем список препятствий
-    score = 0
-    lives = 3  # Количество жизней
-    move_speed_obstacle = 12  # Скорость движения
-    move_speed_penguin = 8
-    id_obstacle = 0
-    old_id = []
-    start_time = time.time()
-    wave_time = time.time()
+    score = 0  # Сбрасываем счет
+    lives = 3  # Сбрасываем жизни на дефолт
+    move_speed_obstacle = 12  # Сбрасываем скорость волн на дефолт
+    move_speed_penguin = 8  # Сбрасываем скорость пингвина на дефолт
+    id_obstacle = 0  # Сброс идентификатора препятствий
+    old_id = []  # Сброс старых идентификаторов
+    start_time = time.time()  # Обновляем время начала
+    wave_time = time.time()  # Обновляем время волны
     last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
-    obstacles.append(last_obstacle)
+    obstacles.append(last_obstacle)  # Добавляем начальное препятствие
 
 # Основная функция игры
 def main():
@@ -686,8 +690,12 @@ def main():
                 running = False
             if event.type == pygame.KEYDOWN:  # Проверка на нажатие клавиши
                 if event.key == pygame.K_ESCAPE:  # Если нажата клавиша "ESC"
-                    if not show_pause_menu(screen):  # Показываем меню паузы
-                        return  # Выход из игры, если пользователь выбрал "Выход"
+                    action = show_pause_menu(screen)  # Показываем меню паузы
+                    if action == "exit":
+                        running = False  # Выход из игры
+                    elif action == "restart":
+                        reset_game()  # Перезапуск игры
+                        continue  # Возвращаемся к началу цикла
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
         if keys[pygame.K_UP] and not penguin.is_jumping and penguin.current_energy >= 33:  # Прыжок при нажатии пробела
@@ -738,11 +746,11 @@ def main():
             add_wave = False
             type_wave_num = random.randint(0, 100)
             if type_wave_num <= 10:  # 10% Вероятность
-                obstacles.append(
-                    Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites))
+                new_wave = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
+                obstacles.append(new_wave)
             elif 11 <= type_wave_num < 100:  # 90% Вероятность
-                obstacles.append(Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280,
-                                      waves_sprites))
+                new_wave = Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280, waves_sprites)
+                obstacles.append(new_wave)
             last_obstacle = obstacles[-1]
             id_obstacle += 1
 
@@ -779,7 +787,8 @@ def main():
         # Отрисовка препятствий
         for obstacle in waves_sprites:
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
-                obstacles.remove(obstacle)
+                if obstacle in obstacles:
+                    obstacles.remove(obstacle)
                 waves_sprites.remove(obstacle)
                 score += 1
 
@@ -807,12 +816,12 @@ def main():
             if penguin.rect.colliderect(seal.rect):  # Проверка на столкновение
                 lives -= 1  # Уменьшаем количество жизней
                 seal.is_damaged = True  # Устанавливаем состояние поврежденного морского котика
-                if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
+                if lives < 0:  # Если жизни меньше 0, показываем экран окончания игры
+                    lives = 3  # Устанавливаем жизни на 0, чтобы избежать отрицательных значений
                     if score > high_score:  # Если текущий счет больше наивысшего
                         update_high_score(score)  # Обновляем наивысший балл
                         high_score = score  # Обновляем переменную high_score
-                    if show_game_over_screen(screen, score):
-                        reset_game()  # Перезапускаем игру
+                    show_game_over_screen(screen, score)  # Показываем экран окончания игры
                 break  # Выходим из цикла, чтобы не обрабатывать других
 
         # Проверка на столкновение с волной
@@ -829,7 +838,8 @@ def main():
                         pass
                     else:
                         lives -= 1  # Уменьшаем количество жизней
-                        obstacles.remove(obstacle)
+                        if obstacle in obstacles:
+                            obstacles.remove(obstacle)
                         waves_sprites.remove(obstacle)  # Удаляем столкнувшееся препятствие
                         if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
                             if score > high_score:  # Если текущий счет больше наивысшего
