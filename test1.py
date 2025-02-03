@@ -927,6 +927,9 @@ def main():
         if random.randint(1, 100) < 10 * water_particle_coefficient:
             create_particles((penguin.rect.x - 10, penguin.rect.y + penguin.rect.width + 10), penguin)
 
+        all_sprites.update()
+        all_sprites.draw(screen)
+
         # Отрисовка препятствий
         for obstacle in waves_sprites:
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
