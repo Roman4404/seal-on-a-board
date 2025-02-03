@@ -209,7 +209,7 @@ class Bird(pygame.sprite.Sprite):
     def update(self):
         if self.caught:
             # Если птица поймана, она остается на месте с пингвином
-            if pygame.time.get_ticks() - self.catch_time > 2000:  # 2 секунды
+            if pygame.time.get_ticks() - self.catch_time > 1000:  # 2 секунды
                 self.caught = False  # Птица улетает
                 self.rect.x -= 5  # Птица продолжает двигаться влево
         else:
