@@ -70,6 +70,7 @@ big_wave_image = pygame.image.load('data/wave.png')
 small_wave_image = pygame.image.load('data/small_wave.png')
 down_kant_image = pygame.image.load('data/Pingein_concept_animated_down_kant_player.png')
 bird_image = pygame.image.load('data/bird_concept.png')
+animated_pengin = pygame.image.load('data/Pingein_player_animated_loose_hard_wave-export.png')
 
 # Группы спрайтов
 all_sprites = pygame.sprite.Group()
@@ -103,6 +104,10 @@ class Penguin(pygame.sprite.Sprite):
         self.current_energy = self.max_energy  # Текущая энергия
         self.energy_recovery_rate = self.max_energy / 22  # Вос становление энергии в секунду
         self.last_energy_update_time = pygame.time.get_ticks()  # Время последнего обновления энергии
+        self.frames = []
+        self.cut_sheet(animated_pengin, 73, 1)
+        self.cur_frame = 0
+        self.animated_loose_fd = False
 
     def animated_down(self):
         self.image = penguin_down_image
@@ -114,6 +119,18 @@ class Penguin(pygame.sprite.Sprite):
 
     def animated_kant(self):
         self.image = down_kant_image
+
+    def animated_loose(self):
+        self.animated_loose_fd = True
+        self.cur_frame = 0
+        self.rect = self.frames[0].get_rect(center=self.rect.center)  # Центрируем прямоугольник
+
+    def cut_sheet(self, sheet, columns, rows):
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (468 * i, 267 * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, (468, 267))))
 
     def jump(self):
         if self.is_jumping:
@@ -133,7 +150,17 @@ class Penguin(pygame.sprite.Sprite):
                 self.velocity_y += self.gravity
                 self.rect.y += self.velocity_y
 
-    def update(self):
+    def update(self, time):
+        if time and self.animated_loose_fd:
+            self.cur_frame = (self.cur_frame + 1)
+            print(self.cur_frame)
+            if self.cur_frame == 73:
+                imga = penguin_image
+                self.animated_loose_fd = False
+            else:
+                imga = self.frames[self.cur_frame]
+            self.image = imga
+
         if self.hanging:
             if pygame.time.get_ticks() - self.hang_start_time >= 1000:  # 1 секунда
                 self.hanging = False  # Завершаем зависание
@@ -674,7 +701,7 @@ def main():
             penguin.current_energy -= 33  # Уменьшаем энергию на 33%
         if keys[pygame.K_DOWN]:
             penguin.animated_down()
-        else:
+        elif not penguin.animated_loose_fd:
             penguin.animated_up()
 
         # Ограничение движения пингвина, чтобы он не выходил за пределы экрана
@@ -701,7 +728,13 @@ def main():
             wave_time = time.time()
 
         # Обновление состояния пингвина
-        penguin.update()
+        end_time = time.time()
+        ele_time = end_time - start_time
+        if ele_time > 0.1:
+            penguin.update(True)
+            start_time = time.time()
+        else:
+            penguin.update(False)
 
         # Рассчитываем пройденное расстояние
         distance_traveled += move_speed_penguin / FPS  # Увеличиваем пройденное расстояние на скорость пингвина
@@ -787,6 +820,7 @@ def main():
                         pass
                     else:
                         lives -= 1  # Уменьшаем количество жизней
+                        penguin.animated_loose()
                         obstacles.remove(obstacle)
                         waves_sprites.remove(obstacle)  # Удаляем столкнувшееся препятствие
                         if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
