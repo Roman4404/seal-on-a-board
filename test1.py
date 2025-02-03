@@ -4,7 +4,6 @@ import time
 import sqlite3
 import json
 
-
 # Функция для инициализации базы данных
 def init_db():
     conn = sqlite3.connect('highscore.db')
@@ -36,9 +35,10 @@ def get_high_score():
     conn.close()
     return high_score
 
-def save_settings(volume, brightness):
+def save_settings(volume, track='track1'):
     settings = {
-        'volume': volume
+        'volume': volume,
+        'track': track
     }
     with open('settings.json', 'w') as f:
         json.dump(settings, f)
@@ -47,11 +47,13 @@ def load_settings():
     try:
         with open('settings.json', 'r') as f:
             settings = json.load(f)
-            return settings.get('volume', 0.5)  # Возвращаем значения по умолчанию
+            return (settings.get('volume', 0.5),
+                    settings.get('track', 'track1'))
     except (FileNotFoundError, json.JSONDecodeError):
-        return 0.5  # Возвращаем значения по умолчанию, если файл не найден или поврежден
+        return (0.5, 'track1')  # Возвращаем значения по умолчанию, если файл не найден или поврежден
 
 pygame.init()
+pygame.mixer.init()
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
 FPS = 60
@@ -59,6 +61,7 @@ WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 BLACK = (0, 0, 0)
 paused = False  # Переменная для отслеживания состояния паузы
+COUNTDOWN_DURATION = 1000 # для обратного отсчета
 
 # Загрузка изображений
 penguin_image = pygame.image.load('data/Pingein_player2.png')
@@ -70,6 +73,8 @@ big_wave_image = pygame.image.load('data/wave.png')
 small_wave_image = pygame.image.load('data/small_wave.png')
 down_kant_image = pygame.image.load('data/Pingein_concept_animated_down_kant_player.png')
 bird_image = pygame.image.load('data/bird_concept.png')
+seal_image = pygame.image.load('data/kotik.png')
+seal_damag = pygame.image.load('data/kotik_damag.png')
 
 # Группы спрайтов
 all_sprites = pygame.sprite.Group()
@@ -77,7 +82,7 @@ player_sprites = pygame.sprite.Group()
 waves_sprites = pygame.sprite.Group()
 cloud_sprites = pygame.sprite.Group()
 bird_sprites = pygame.sprite.Group()
-
+seals_sprites = pygame.sprite.Group()
 
 # Класс для пингвина
 class Penguin(pygame.sprite.Sprite):
@@ -101,7 +106,7 @@ class Penguin(pygame.sprite.Sprite):
         # Энергия
         self.max_energy = 100  # Максимальная энергия
         self.current_energy = self.max_energy  # Текущая энергия
-        self.energy_recovery_rate = self.max_energy / 22  # Вос становление энергии в секунду
+        self.energy_recovery_rate = self.max_energy / 22  # Восстановление энергии в секунду
         self.last_energy_update_time = pygame.time.get_ticks()  # Время последнего обновления энергии
 
     def animated_down(self):
@@ -204,7 +209,7 @@ class Bird(pygame.sprite.Sprite):
     def update(self):
         if self.caught:
             # Если птица поймана, она остается на месте с пингвином
-            if pygame.time.get_ticks() - self.catch_time > 2000:  # 2 секунды
+            if pygame.time.get_ticks() - self.catch_time > 1000:  # 2 секунды
                 self.caught = False  # Птица улетает
                 self.rect.x -= 5  # Птица продолжает двигаться влево
         else:
@@ -212,6 +217,30 @@ class Bird(pygame.sprite.Sprite):
 
         # Удаление птицы, если она вышла за экран
         if self.rect.x < -self.rect.width:
+            self.kill()
+
+
+class Seal(pygame.sprite.Sprite):
+    def __init__(self, *group):
+        super().__init__(*group)
+        self.image = seal_image
+        self.damag_image = seal_damag
+        self.rect = self.image.get_rect()
+        self.rect.x = -self.rect.width
+        self.rect.y = SCREEN_HEIGHT - 175
+        self.is_damaged = False
+        self.damage_time = 0  # Добавляем новое свойство
+
+    def update(self, speed):
+        # Восстанавливаем текстуру через 1 секунду
+        if self.is_damaged and pygame.time.get_ticks() - self.damage_time > 1000:
+            self.is_damaged = False
+            self.image = seal_image
+        if self.is_damaged:
+            self.image = self.damag_image
+
+        self.rect.x += speed
+        if self.rect.x > SCREEN_WIDTH:
             self.kill()
 
 
@@ -356,7 +385,13 @@ def draw_rounded_rect(surface, color, rect, radius):
     """Рисует скругленный прямоугольник."""
     pygame.draw.rect(surface, color, rect, border_radius=radius)
 
+
 def show_pause_menu(screen):
+    # Сохраняем состояние музыки
+    was_playing = pygame.mixer.music.get_busy()
+    if was_playing:
+        pygame.mixer.music.pause()
+
     font = pygame.font.Font(None, 74)
     pause_text = font.render("Paused", True, WHITE)
     pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
@@ -375,11 +410,10 @@ def show_pause_menu(screen):
     exit_rect = exit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
 
     while True:
-        # Не заливаем фон, чтобы он оставался полностью прозрачным
-        screen.fill((0, 0, 0, 0))  # Убедитесь, что вы используете прозрачный цвет, если ваша версия Pygame это поддерживает
+        screen.fill((0, 0, 0, 0))
         screen.blit(pause_text, pause_rect)
 
-        # Рисуем скругленные прямоугольники вокруг текста
+        # Рисуем скругленные прямоугольники
         draw_rounded_rect(screen, (255, 255, 255), resume_rect.inflate(20, 10), 15)
         draw_rounded_rect(screen, (255, 255, 255), restart_rect.inflate(20, 10), 15)
         draw_rounded_rect(screen, (255, 255, 255), settings_rect.inflate(20, 10), 15)
@@ -394,24 +428,32 @@ def show_pause_menu(screen):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                return "exit"  # Возвращаем "exit" для выхода из игры
-            if event.type == pygame.MOUSEBUTTONDOWN:  # Проверка на нажатие кнопки мыши
-                mouse_pos = pygame.mouse.get_pos()  # Получаем позицию мыши
-                if resume_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Продолжить"
-                    return "resume"  # Продолжаем игру
-                if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Рестарт"
-                    global obstacles
-                    obstacles = []  # Очищаем список препятствий
-                    reset_game()  # Полный перезапуск игры
-                    return  # Возвращаемся в основной игровой цикл
-                if settings_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Настройки"
+                if was_playing:
+                    pygame.mixer.music.stop()
+                return "exit"
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if resume_rect.collidepoint(mouse_pos):
+                    if was_playing:
+                        pygame.mixer.music.unpause()
+                    return "resume"
+                if restart_rect.collidepoint(mouse_pos):
+                    if was_playing:
+                        pygame.mixer.music.stop()
+                    return "restart"
+                if settings_rect.collidepoint(mouse_pos):
                     show_settings_menu(screen)
-                if exit_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Выход"
-                    if show_exit_confirmation(screen):  # Показываем окно подтверждения выхода
-                        return "exit"  # Выход из игры
-            if event.type == pygame.KEYDOWN:  # Проверка на нажатие клавиши
-                if event.key == pygame.K_ESCAPE:  # Если нажата клавиша "ESC"
-                    return "resume"  # Продолжаем игру
+                if exit_rect.collidepoint(mouse_pos):
+                    if show_exit_confirmation(screen):
+                        pygame.quit()
+                        return "exit"
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    if was_playing:
+                        pygame.mixer.music.unpause()
+                    return "resume"
 
 # Функция для отображения заставки
 def show_start_screen(screen):
@@ -437,7 +479,6 @@ def show_start_screen(screen):
         draw_rounded_rect(screen, (255, 255, 255), play_rect.inflate(20, 10), 15)
         draw_rounded_rect(screen, (255, 255, 255), exit_rect.inflate(20, 10), 15)
         draw_rounded_rect(screen, (255, 255, 255), settings_rect.inflate(20, 10), 15)
-
         screen.blit(play_text, play_rect)
         screen.blit(exit_text, exit_rect)
         screen.blit(settings_text, settings_rect)
@@ -499,49 +540,103 @@ def show_game_over_screen(screen, score):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                return
+                return False  # Выход из игры
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Restart"
-                    reset_game()  # Полный перезапуск игры
-                    return  # Возвращаемся в основной игровой цикл
+                if restart_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Рестарт"
+                    return True  # Возвращаемся в основной игровой цикл для перезапуска
                 if settings_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Настройки"
                     show_settings_menu(screen)
-                if exit_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "Quit"
+                if exit_rect.collidepoint(mouse_pos):  # Проверка, попадает ли мышь на кнопку "В другой раз"
                     pygame.quit()
-                    return
+                    return False  # Выход из игры
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:  # Если нажата клавиша "R"
-                    reset_game()  # Полный перезапуск игры
-                    return  # Возвращаемся в основной игровой цикл
+                    return True  # Возвращаемся в основной игровой цикл для перезапуска
                 if event.key == pygame.K_q:  # Если нажата клавиша "Q"
                     pygame.quit()
-                    return
+                    return False  # Выход из игры
+
 
 def show_settings_menu(screen):
+    current_tab = 'audio'  # 'audio' или 'controls'
+    settings = {
+        'volume': load_settings()[0],
+        'track': load_settings()[1]
+    }
+    tracks = {
+        'track1': 'Музыка 1',
+        'track2': 'Музыка 2'
+    }
+
     font = pygame.font.Font(None, 36)
-    volume = load_settings()  # Загружаем настройки
-
     while True:
-        screen.fill((0, 0, 0))  # Заливка фона черным цветом
-        volume_text = font.render(f"Громкость: {int(volume * 100)}%", True, (255, 255, 255))
+        screen.fill((0, 0, 0))
 
-        screen.blit(volume_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 50))
+        # Рисуем вкладки
+        tab_audio_rect = pygame.Rect(50, 20, 150, 40)
+        tab_controls_rect = pygame.Rect(220, 20, 150, 40)
 
-        # Ползунки
-        volume_slider_rect = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 50, 200, 10)
+        # Кнопки вкладок
+        pygame.draw.rect(screen, (0, 150, 0) if current_tab == 'audio' else (50, 50, 50), tab_audio_rect,
+                         border_radius=10)
+        pygame.draw.rect(screen, (0, 150, 0) if current_tab == 'controls' else (50, 50, 50), tab_controls_rect,
+                         border_radius=10)
 
-        # Отрисовка ползунков
-        pygame.draw.rect(screen, (255, 255, 255), volume_slider_rect)  # Фон ползунка громкости
-        pygame.draw.rect(screen, (0, 255, 0), (volume_slider_rect.x + int(volume * 200) - 5, volume_slider_rect.y - 5, 10, 20))  # Ползунок громкости
+        tab_audio_text = font.render("Аудио", True, (255, 255, 255))
+        tab_controls_text = font.render("Управление", True, (255, 255, 255))
+        screen.blit(tab_audio_text, tab_audio_text.get_rect(center=tab_audio_rect.center))
+        screen.blit(tab_controls_text, tab_controls_text.get_rect(center=tab_controls_rect.center))
 
-        # Кнопка "ПРИМЕНИТЬ"
-        apply_text = font.render("ПРИМЕНИТЬ", True, (0, 255, 0))
-        apply_rect = apply_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
-        screen.blit(apply_text, apply_rect)
+        if current_tab == 'audio':
+            # Содержимое вкладки аудио
+            volume_text = font.render(f"Громкость: {int(settings['volume'] * 100)}%", True, (255, 255, 255))
+            screen.blit(volume_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 150))
 
-        back_text = font.render("Назад", True, (255, 255, 255))
-        screen.blit(back_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 200))
+            volume_slider_rect = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 100, 200, 10)
+            pygame.draw.rect(screen, (255, 255, 255), volume_slider_rect)
+            pygame.draw.rect(screen, (0, 255, 0), (volume_slider_rect.x + int(settings['volume'] * 200) - 5,
+                                                   volume_slider_rect.y - 5, 10, 20))
+
+            # Выбор треков
+            y_offset = SCREEN_HEIGHT // 2 - 50
+            for track_id, track_name in tracks.items():
+                btn_color = (0, 255, 0) if settings['track'] == track_id else (100, 100, 100)
+                btn_text = font.render(track_name, True, btn_color)
+                btn_rect = btn_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                screen.blit(btn_text, btn_rect)
+                y_offset += 40
+
+        else:
+            # Содержимое вкладки управления
+            controls = [
+                "UP - Прыжок",
+                "DOWN - Присесть",
+                "ESC - Меню паузы",
+                "R - Рестарт"
+            ]
+
+            y_offset = SCREEN_HEIGHT // 2 - 150
+            control_font = pygame.font.Font(None, 40)
+            title_text = control_font.render("Управление", True, (255, 255, 255))
+            screen.blit(title_text, (SCREEN_WIDTH // 2 - 80, y_offset))
+            y_offset += 60
+
+            for control in controls:
+                text = font.render(control, True, (255, 255, 255))
+                screen.blit(text, (SCREEN_WIDTH // 2 - 100, y_offset))
+                y_offset += 40
+
+        # Кнопки управления
+        apply_rect = pygame.Rect(SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 200, 160, 40)
+        pygame.draw.rect(screen, (0, 255, 0), apply_rect, border_radius=20)
+        apply_text = font.render("Применить", True, (0, 0, 0))
+        screen.blit(apply_text, apply_text.get_rect(center=apply_rect.center))
+
+        back_rect = pygame.Rect(SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 250, 160, 40)
+        pygame.draw.rect(screen, (255, 0, 0), back_rect, border_radius=20)
+        back_text = font.render("Назад", True, (0, 0, 0))
+        screen.blit(back_text, back_text.get_rect(center=back_rect.center))
 
         pygame.display.flip()
 
@@ -549,21 +644,49 @@ def show_settings_menu(screen):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
+
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                if apply_rect.collidepoint(mouse_pos):
-                    save_settings(volume)  # Сохраняем настройки
-                    pygame.mixer.music.set_volume(volume)  # Применяем громкость
-                    continue  # Продолжаем цикл, чтобы не выходить из меню
-                if back_text.get_rect(topleft=(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 200)).collidepoint(mouse_pos):
-                    return  # Возвращаемся в предыдущее меню
 
-            if event.type == pygame.MOUSEMOTION:
-                if event.buttons[0]:  # Если нажата левая кнопка мыши
+                # Переключение вкладок
+                if tab_audio_rect.collidepoint(mouse_pos):
+                    current_tab = 'audio'
+                elif tab_controls_rect.collidepoint(mouse_pos):
+                    current_tab = 'controls'
+
+                # Обработка для вкладки аудио
+                if current_tab == 'audio':
+                    # Выбор трека
+                    y_offset = SCREEN_HEIGHT // 2 - 50
+                    for track_id in tracks.keys():
+                        btn_rect = pygame.Rect(SCREEN_WIDTH // 2 - 75, y_offset - 15, 150, 30)
+                        if btn_rect.collidepoint(mouse_pos):
+                            settings['track'] = track_id
+                            pygame.mixer.music.load(f'data/{track_id}.mp3')
+                            pygame.mixer.music.play(-1)
+                            pygame.mixer.music.set_volume(settings['volume'])
+                        y_offset += 40
+
+                    # Ползунок громкости
+                    if volume_slider_rect.collidepoint(mouse_pos):
+                        settings['volume'] = (mouse_pos[0] - volume_slider_rect.x) / volume_slider_rect.width
+                        settings['volume'] = max(0, min(1, settings['volume']))
+                        pygame.mixer.music.set_volume(settings['volume'])
+
+                # Кнопки управления
+                if apply_rect.collidepoint(mouse_pos):
+                    save_settings(settings['volume'], settings['track'])
+                    return
+
+                if back_rect.collidepoint(mouse_pos):
+                    return
+
+            if event.type == pygame.MOUSEMOTION and current_tab == 'audio':
+                if event.buttons[0]:  # Перетаскивание ползунка
                     if volume_slider_rect.collidepoint(event.pos):
-                        volume = (event.pos[0] - volume_slider_rect.x) / volume_slider_rect.width
-                        volume = max(0, min(volume, 1))  # Ограничиваем значение от 0 до 1
-                        pygame.mixer.music.set_volume(volume)  # Установка громкости музыки
+                        settings['volume'] = (event.pos[0] - volume_slider_rect.x) / volume_slider_rect.width
+                        settings['volume'] = max(0, min(1, settings['volume']))
+                        pygame.mixer.music.set_volume(settings['volume'])
 
 def show_exit_confirmation(screen):
     font = pygame.font.Font(None, 36)
@@ -598,6 +721,28 @@ def show_exit_confirmation(screen):
                 if event.key == pygame.K_ESCAPE:
                     return False  # Отмена выхода
 
+
+def show_start_countdown(screen):
+    font = pygame.font.Font(None, 300)
+    countdown_numbers = ['SEAL!']
+
+    for number in countdown_numbers:
+        start_time = pygame.time.get_ticks()
+        alpha = 255  # Начальная непрозрачность
+        while pygame.time.get_ticks() - start_time < COUNTDOWN_DURATION:
+            # Прозрачность уменьшается от 255 до 0
+            alpha = max(0, 255 - int(255 * (pygame.time.get_ticks() - start_time) / COUNTDOWN_DURATION))
+            # Очищаем экран
+            screen.fill(BLUE)
+            # Создаем текст с текущей прозрачностью
+            text_surface = font.render(number, True, WHITE)
+            text_surface.set_alpha(alpha)
+            # Центрируем текст
+            text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+            screen.blit(text_surface, text_rect)
+            pygame.display.flip()
+            pygame.time.delay(30)
+
 def create_particles(position, penguin):
     # количество создаваемых частиц
     particle_count = 20
@@ -606,35 +751,28 @@ def create_particles(position, penguin):
     for _ in range(particle_count):
         Particle_Water(position, random.choice(numbers), random.choice(numbers), penguin)
 
-def reset_game():
-    global penguin, obstacles, score, lives, move_speed_obstacle, move_speed_penguin, id_obstacle, old_id, start_time, wave_time
-    penguin = Penguin(player_sprites)
-    obstacles.clear()
-    score = 0
-    lives = 3  # Количество жизней
-    move_speed_obstacle = 12  # Скорость движения
-    move_speed_penguin = 8
-    id_obstacle = 0
-    old_id = []
-    start_time = time.time()
-    wave_time = time.time()
-    last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
-    obstacles.append(last_obstacle)
-
 # Основная функция игры
 def main():
     init_db()  # Инициализация базы данных
-    volume = load_settings()  # Загружаем настройки
+    volume, track = load_settings()  # Загружаем настройки
     pygame.mixer.music.set_volume(volume)  # Установка громкости музыки
     high_score = get_high_score()  # Получаем текущий наивысший балл
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Seal on a Board")
     clock = pygame.time.Clock()
     show_loading_screen(screen)
+    show_start_countdown(screen)
+    try:
+        pygame.mixer.music.load(f'data/{track}.mp3')
+        pygame.mixer.music.set_volume(volume)
+        pygame.mixer.music.play(-1)
+    except Exception as e:
+        print(f"Ошибка загрузки музыки: {e}")
 
     # Инициализация шрифта
     font = pygame.font.Font(None, 36)  # Создаем объект шрифта
 
+    # Создаем пингвина и добавляем его в группу
     penguin = Penguin(player_sprites)
     water = Water()
     sky = Sky()
@@ -652,6 +790,8 @@ def main():
     obstacles.append(last_obstacle)
     add_wave = False
     on_wave = False
+    last_seal_spawn_time = pygame.time.get_ticks()  # Время последнего спавна морского котика
+    seal_spawn_interval = random.randint(7000, 23000)
     last_bird_spawn_time = pygame.time.get_ticks()  # Время последнего спавна птицы
     bird_spawn_interval = random.randint(10000, 20000)
     water_particle_coefficient = 0.5 + move_speed_penguin // 10  # Коэффициент брызгов зависит от скорости пингвина и от того что он на волне или нет
@@ -664,8 +804,43 @@ def main():
                 running = False
             if event.type == pygame.KEYDOWN:  # Проверка на нажатие клавиши
                 if event.key == pygame.K_ESCAPE:  # Если нажата клавиша "ESC"
-                    if not show_pause_menu(screen):  # Показываем меню паузы
-                        return  # Выход из игры, если пользователь выбрал "Выход"
+                    action = show_pause_menu(screen)  # Показываем меню паузы
+                    if action == "exit":
+                        running = False  # Выход из игры
+                    elif action == "restart":
+                        # Сброс состояния игры
+                        player_sprites.empty()
+                        waves_sprites.empty()
+                        cloud_sprites.empty()
+                        bird_sprites.empty()
+                        seals_sprites.empty()
+                        all_sprites.empty()
+                        # Сброс переменных состояния
+                        penguin = Penguin(player_sprites)
+                        obstacles.clear()
+                        score = 0
+                        lives = 3
+                        move_speed_obstacle = 12
+                        move_speed_penguin = 8
+                        id_obstacle = 0
+                        old_id = []
+                        start_time = time.time()
+                        wave_time = time.time()
+                        # Пересоздание начальной волны
+                        last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT,
+                                             SCREEN_HEIGHT - 275, waves_sprites)
+                        obstacles.append(last_obstacle)
+                        # Сброс таймеров спавна
+                        last_seal_spawn_time = pygame.time.get_ticks()
+                        last_bird_spawn_time = pygame.time.get_ticks()
+                        distance_traveled = 0
+                        volume, track = load_settings()
+                        try:
+                            pygame.mixer.music.load(f'data/{track}.mp3')
+                            pygame.mixer.music.play(-1)
+                        except Exception as e:
+                            print(f"Ошибка загрузки музыки: {e}")
+                        continue
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
         if keys[pygame.K_UP] and not penguin.is_jumping and penguin.current_energy >= 33:  # Прыжок при нажатии пробела
@@ -700,9 +875,6 @@ def main():
             add_wave = True
             wave_time = time.time()
 
-        # Обновление состояния пингвина
-        penguin.update()
-
         # Рассчитываем пройденное расстояние
         distance_traveled += move_speed_penguin / FPS  # Увеличиваем пройденное расстояние на скорость пингвина
         distance_traveled += move_speed_obstacle / FPS  # Увеличиваем пройденное расстояние на скорость волн
@@ -715,12 +887,12 @@ def main():
         if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150 and add_wave:
             add_wave = False
             type_wave_num = random.randint(0, 100)
-            if type_wave_num <= 10:  # 10% Вероятность
-                obstacles.append(
-                    Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites))
+            if type_wave_num <= 12:  # 10% Вероятность
+                new_wave = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
+                obstacles.append(new_wave)
             elif 11 <= type_wave_num < 100:  # 90% Вероятность
-                obstacles.append(Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280,
-                                      waves_sprites))
+                new_wave = Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280, waves_sprites)
+                obstacles.append(new_wave)
             last_obstacle = obstacles[-1]
             id_obstacle += 1
 
@@ -731,27 +903,84 @@ def main():
             last_bird_spawn_time = current_time  # Обновляем время последнего спавна
             bird_spawn_interval = random.randint(10000, 20000)
 
+        # Проверка времени для спавна морского котика
+        current_time = pygame.time.get_ticks()
+        if current_time - last_seal_spawn_time > seal_spawn_interval:
+            Seal(seals_sprites)  # Создаем нового морского котика
+            last_seal_spawn_time = current_time  # Обновляем время последнего спавна
+            seal_spawn_interval = random.randint(7000, 23000)  # Устанавливаем новый интервал
+
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
         player_sprites.draw(screen)
+        penguin.update() # Обновление состояния пингвина
         waves_sprites.update(move_speed_obstacle)
         waves_sprites.draw(screen)
         bird_sprites.update()  # Обновляем птиц
+        seals_sprites.update(move_speed_penguin)  # Обновляем морских котиков, чтобы они плыли за пингвином
+        seals_sprites.draw(screen)  # Отрисовываем морских котиков
         bird_sprites.draw(screen)
+
         draw_energy_bar(screen, penguin)
 
         # Спавн брызгов вероятность от 5% до 10%
         if random.randint(1, 100) < 10 * water_particle_coefficient:
             create_particles((penguin.rect.x - 10, penguin.rect.y + penguin.rect.width + 10), penguin)
 
+        all_sprites.update()
+        all_sprites.draw(screen)
+
         # Отрисовка препятствий
         for obstacle in waves_sprites:
             if obstacle.rect.x > SCREEN_WIDTH:  # Удаление препятствий, вышедших за экран
-                obstacles.remove(obstacle)
+                if obstacle in obstacles:
+                    obstacles.remove(obstacle)
                 waves_sprites.remove(obstacle)
                 score += 1
 
         water.draw(screen)  # Прорисовываем воду
+
+        # Проверка на столкновение с морскими котиками
+        for seal in seals_sprites:
+            if penguin.rect.colliderect(seal.rect) and not seal.is_damaged:  # Проверяем только неповрежденных котиков
+                lives -= 1
+                seal.is_damaged = True
+                seal.damage_time = pygame.time.get_ticks()  # Запоминаем время получения урона
+
+                # Обновляем отображение жизней
+                lives_text = font.render(f'Lives: {lives}', True, WHITE)
+                screen.blit(lives_text, (10, 50))
+                pygame.display.update()
+                if lives <= 0:
+                    if show_game_over_screen(screen, score):  # Показываем экран окончания игры
+                        # Полный сброс игры
+                        player_sprites.empty()
+                        waves_sprites.empty()
+                        cloud_sprites.empty()
+                        bird_sprites.empty()
+                        seals_sprites.empty()
+                        all_sprites.empty()
+
+                        penguin = Penguin(player_sprites)
+                        obstacles.clear()
+                        score = 0
+                        lives = 3
+                        move_speed_obstacle = 12
+                        move_speed_penguin = 8
+                        id_obstacle = 0
+                        old_id = []
+                        start_time = time.time()
+                        wave_time = time.time()
+                        last_obstacle = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT,
+                                             SCREEN_HEIGHT - 275, waves_sprites)
+                        obstacles.append(last_obstacle)
+                        last_seal_spawn_time = pygame.time.get_ticks()
+                        last_bird_spawn_time = pygame.time.get_ticks()
+                        distance_traveled = 0
+                        continue
+                    else:
+                        running = False
+                break
 
         # Проверка на столкновение с птицей
         for bird in bird_sprites:
@@ -784,7 +1013,8 @@ def main():
                         pass
                     else:
                         lives -= 1  # Уменьшаем количество жизней
-                        obstacles.remove(obstacle)
+                        if obstacle in obstacles:
+                            obstacles.remove(obstacle)
                         waves_sprites.remove(obstacle)  # Удаляем столкнувшееся препятствие
                         if lives <= 0:  # Если жизни закончились, показываем экран окончания игры
                             if score > high_score:  # Если текущий счет больше наивысшего
@@ -792,8 +1022,8 @@ def main():
                                 high_score = score  # Обновляем переменную high_score
 
                             if show_game_over_screen(screen, score):
-                                player_sprites.remove(penguin)
-                                penguin = Penguin(player_sprites)  # Перезапускаем игру
+                                player_sprites.empty()  # Удаляем старую модельку пингвина
+                                penguin = Penguin(player_sprites)  # Создаем новую модельку
                                 obstacles.clear()
                                 score = 0
                                 lives = 3  # Количество жизней
