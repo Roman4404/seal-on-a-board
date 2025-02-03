@@ -559,6 +559,7 @@ def show_game_over_screen(screen, score):
 
 
 def show_settings_menu(screen):
+    current_tab = 'audio'  # 'audio' или 'controls'
     settings = {
         'volume': load_settings()[0],
         'track': load_settings()[1]
@@ -571,34 +572,72 @@ def show_settings_menu(screen):
     font = pygame.font.Font(None, 36)
     while True:
         screen.fill((0, 0, 0))
-        # Отрисовка элементов громкости
-        volume_text = font.render(f"Громкость: {int(settings['volume'] * 100)}%", True, (255, 255, 255))
-        screen.blit(volume_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 150))
-        volume_slider_rect = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 100, 200, 10)
-        pygame.draw.rect(screen, (255, 255, 255), volume_slider_rect)
-        pygame.draw.rect(screen, (0, 255, 0), (volume_slider_rect.x + int(settings['volume'] * 200) - 5,
-                                               volume_slider_rect.y - 5, 10, 20))
 
-        # Кнопки выбора музыки
-        music_buttons = []
-        y_offset = SCREEN_HEIGHT // 2 - 50
-        for track_id, track_name in tracks.items():
-            btn_color = (0, 255, 0) if settings['track'] == track_id else (100, 100, 100)
-            btn_text = font.render(track_name, True, btn_color)
-            btn_rect = btn_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
-            screen.blit(btn_text, btn_rect)
-            music_buttons.append((track_id, btn_rect))
-            y_offset += 40
+        # Рисуем вкладки
+        tab_audio_rect = pygame.Rect(50, 20, 150, 40)
+        tab_controls_rect = pygame.Rect(220, 20, 150, 40)
+
+        # Кнопки вкладок
+        pygame.draw.rect(screen, (0, 150, 0) if current_tab == 'audio' else (50, 50, 50), tab_audio_rect,
+                         border_radius=10)
+        pygame.draw.rect(screen, (0, 150, 0) if current_tab == 'controls' else (50, 50, 50), tab_controls_rect,
+                         border_radius=10)
+
+        tab_audio_text = font.render("Аудио", True, (255, 255, 255))
+        tab_controls_text = font.render("Управление", True, (255, 255, 255))
+        screen.blit(tab_audio_text, tab_audio_text.get_rect(center=tab_audio_rect.center))
+        screen.blit(tab_controls_text, tab_controls_text.get_rect(center=tab_controls_rect.center))
+
+        if current_tab == 'audio':
+            # Содержимое вкладки аудио
+            volume_text = font.render(f"Громкость: {int(settings['volume'] * 100)}%", True, (255, 255, 255))
+            screen.blit(volume_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 150))
+
+            volume_slider_rect = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 100, 200, 10)
+            pygame.draw.rect(screen, (255, 255, 255), volume_slider_rect)
+            pygame.draw.rect(screen, (0, 255, 0), (volume_slider_rect.x + int(settings['volume'] * 200) - 5,
+                                                   volume_slider_rect.y - 5, 10, 20))
+
+            # Выбор треков
+            y_offset = SCREEN_HEIGHT // 2 - 50
+            for track_id, track_name in tracks.items():
+                btn_color = (0, 255, 0) if settings['track'] == track_id else (100, 100, 100)
+                btn_text = font.render(track_name, True, btn_color)
+                btn_rect = btn_text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                screen.blit(btn_text, btn_rect)
+                y_offset += 40
+
+        else:
+            # Содержимое вкладки управления
+            controls = [
+                "UP - Прыжок",
+                "DOWN - Присесть",
+                "ESC - Меню паузы",
+                "R - Рестарт"
+            ]
+
+            y_offset = SCREEN_HEIGHT // 2 - 150
+            control_font = pygame.font.Font(None, 40)
+            title_text = control_font.render("Управление", True, (255, 255, 255))
+            screen.blit(title_text, (SCREEN_WIDTH // 2 - 80, y_offset))
+            y_offset += 60
+
+            for control in controls:
+                text = font.render(control, True, (255, 255, 255))
+                screen.blit(text, (SCREEN_WIDTH // 2 - 100, y_offset))
+                y_offset += 40
 
         # Кнопки управления
-        apply_rect = pygame.Rect(SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 100, 160, 40)
+        apply_rect = pygame.Rect(SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 200, 160, 40)
         pygame.draw.rect(screen, (0, 255, 0), apply_rect, border_radius=20)
         apply_text = font.render("Применить", True, (0, 0, 0))
         screen.blit(apply_text, apply_text.get_rect(center=apply_rect.center))
-        back_rect = pygame.Rect(SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 150, 160, 40)
+
+        back_rect = pygame.Rect(SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 250, 160, 40)
         pygame.draw.rect(screen, (255, 0, 0), back_rect, border_radius=20)
         back_text = font.render("Назад", True, (0, 0, 0))
         screen.blit(back_text, back_text.get_rect(center=back_rect.center))
+
         pygame.display.flip()
 
         for event in pygame.event.get():
@@ -609,21 +648,32 @@ def show_settings_menu(screen):
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
 
-                # Обработка выбора трека
-                for track_id, btn_rect in music_buttons:
-                    if btn_rect.collidepoint(mouse_pos):
-                        settings['track'] = track_id
-                        # Воспроизводим выбранный трек для предпрослушивания
-                        pygame.mixer.music.load(f'data/{track_id}.mp3')
-                        pygame.mixer.music.play(-1)
+                # Переключение вкладок
+                if tab_audio_rect.collidepoint(mouse_pos):
+                    current_tab = 'audio'
+                elif tab_controls_rect.collidepoint(mouse_pos):
+                    current_tab = 'controls'
+
+                # Обработка для вкладки аудио
+                if current_tab == 'audio':
+                    # Выбор трека
+                    y_offset = SCREEN_HEIGHT // 2 - 50
+                    for track_id in tracks.keys():
+                        btn_rect = pygame.Rect(SCREEN_WIDTH // 2 - 75, y_offset - 15, 150, 30)
+                        if btn_rect.collidepoint(mouse_pos):
+                            settings['track'] = track_id
+                            pygame.mixer.music.load(f'data/{track_id}.mp3')
+                            pygame.mixer.music.play(-1)
+                            pygame.mixer.music.set_volume(settings['volume'])
+                        y_offset += 40
+
+                    # Ползунок громкости
+                    if volume_slider_rect.collidepoint(mouse_pos):
+                        settings['volume'] = (mouse_pos[0] - volume_slider_rect.x) / volume_slider_rect.width
+                        settings['volume'] = max(0, min(1, settings['volume']))
                         pygame.mixer.music.set_volume(settings['volume'])
 
-                # Обработка ползунка громкости
-                if volume_slider_rect.collidepoint(mouse_pos):
-                    settings['volume'] = (mouse_pos[0] - volume_slider_rect.x) / volume_slider_rect.width
-                    settings['volume'] = max(0, min(1, settings['volume']))
-                    pygame.mixer.music.set_volume(settings['volume'])
-
+                # Кнопки управления
                 if apply_rect.collidepoint(mouse_pos):
                     save_settings(settings['volume'], settings['track'])
                     return
@@ -631,7 +681,7 @@ def show_settings_menu(screen):
                 if back_rect.collidepoint(mouse_pos):
                     return
 
-            if event.type == pygame.MOUSEMOTION:
+            if event.type == pygame.MOUSEMOTION and current_tab == 'audio':
                 if event.buttons[0]:  # Перетаскивание ползунка
                     if volume_slider_rect.collidepoint(event.pos):
                         settings['volume'] = (event.pos[0] - volume_slider_rect.x) / volume_slider_rect.width
