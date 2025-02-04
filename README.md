@@ -23,5 +23,3 @@ pip install -r requirements.txt
 ```shell
 python .\test1.py
 ```
-
-## Структура:
