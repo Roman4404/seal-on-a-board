@@ -352,14 +352,14 @@ def draw_energy_bar(screen, penguin):
     screen.blit(bar_background, (10, 250))  # Отображаем прогресс-бар
     # Отображение текста "Jump Energy" на шкале
     font = pygame.font.Font(None, 30)  # Создаем объект шрифта
-    jump_energy_text = font.render("JUMP ENERGY", True, BLUE)
+    jump_energy_text = font.render("ЭНЕРГИЯ ПРЫЖКА", True, BLUE)
     # Получаем прямоугольник текста
     text_rect = jump_energy_text.get_rect(center=(10 + bar_width // 2, 250 + bar_height // 2))
     screen.blit(jump_energy_text, text_rect)  # Отображаем текст на шкале
 
 def show_loading_screen(screen):
     font = pygame.font.Font(None, 74)
-    loading_text = font.render("Loading...", True, WHITE)
+    loading_text = font.render("Загрузка...", True, WHITE)
     loading_rect = loading_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
 
     progress = 0
@@ -424,7 +424,7 @@ def show_pause_menu(screen):
         pygame.mixer.music.pause()
 
     font = pygame.font.Font(None, 74)
-    pause_text = font.render("Paused", True, WHITE)
+    pause_text = font.render("Пауза", True, WHITE)
     pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
 
     font_small = pygame.font.Font(None, 36)
@@ -538,10 +538,10 @@ def show_start_screen(screen):
 # Функция для отображения диалогового окна
 def show_game_over_screen(screen, score):
     font = pygame.font.Font(None, 74)
-    text = font.render("Game Over", True, WHITE)
+    text = font.render("ПОМЕР", True, WHITE)
     text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
     font_small = pygame.font.Font(None, 36)
-    score_text = font_small.render(f"Your Score: {score}", True, WHITE)
+    score_text = font_small.render(f"Рекорд: {score}", True, WHITE)
     score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
 
     restart_text = font_small.render("Рестарт", True, (255, 186, 0))
@@ -641,8 +641,8 @@ def show_settings_menu(screen):
         else:
             # Содержимое вкладки управления
             controls = [
-                "UP - Прыжок",
-                "DOWN - Присесть",
+                "Стрелка вверх - Прыжок",
+                "Стрелка вниз - Присесть",
                 "ESC - Меню паузы",
                 "R - Рестарт"
             ]
@@ -916,7 +916,7 @@ def main():
         distance_traveled += move_speed_obstacle / FPS  # Увеличиваем пройденное расстояние на скорость волн
 
         # Отображение расстояния на экране
-        distance_text = font.render(f'Distance: {distance_traveled:.1f}m', True, WHITE)
+        distance_text = font.render(f'Пройдено: {distance_traveled:.1f}м', True, WHITE)
         screen.blit(distance_text, (10, 250))  # Отображаем расстояние ниже других текстов
 
         # Генерация препятствий с вероятностью 2%
@@ -991,7 +991,7 @@ def main():
                 seal.damage_time = pygame.time.get_ticks()  # Запоминаем время получения урона
 
                 # Обновляем отображение жизней
-                lives_text = font.render(f'Lives: {lives}', True, WHITE)
+                lives_text = font.render(f'Жизни: {lives}', True, WHITE)
                 screen.blit(lives_text, (10, 50))
                 pygame.display.update()
                 if lives <= 0:
@@ -1095,21 +1095,15 @@ def main():
                 water_particle_coefficient = 0.5 + move_speed_penguin // 10
 
         # Отображение других текстов
-        score_text = font.render(f'Score: {score}', True, WHITE)
-        lives_text = font.render(f'Lives: {lives}', True, WHITE)
-        speed_text = font.render(f'Speed: {move_speed_penguin}', True, WHITE)
-        speed_wave_text = font.render(f'Speed wave:{move_speed_obstacle}', True, WHITE)
-        time_wave_text = font.render(f'Time:{wave_elapsed_time}', True, WHITE)
-        high_score_text = font.render(f'High Score: {high_score}', True, WHITE)  # Отображение наивысшего балла
-        help_text = font.render(f'Пока только вниз', True, WHITE)
+        score_text = font.render(f'Очки: {score}', True, WHITE)
+        lives_text = font.render(f'Жизни: {lives}', True, WHITE)
+        speed_text = font.render(f'Скорость: {move_speed_penguin}', True, WHITE)
+        high_score_text = font.render(f'Рекорд: {high_score}', True, WHITE)
         screen.blit(score_text, (10, 10))
         screen.blit(distance_text, (1050, 10))
         screen.blit(lives_text, (10, 50))
         screen.blit(speed_text, (10, 90))
-        screen.blit(speed_wave_text, (10, 130))
-        screen.blit(time_wave_text, (10, 170))
-        screen.blit(high_score_text, (10, 210))  # Отображаем наивысший балл ниже других текстов
-        screen.blit(help_text, (950, 50))
+        screen.blit(high_score_text, (10, 130))
         pygame.display.flip()  # Обновляем экран
 
     pygame.quit()  # Выход из игры
