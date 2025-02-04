@@ -75,6 +75,7 @@ down_kant_image = pygame.image.load('data/Pingein_concept_animated_down_kant_pla
 bird_image = pygame.image.load('data/bird_concept.png')
 seal_image = pygame.image.load('data/kotik.png')
 seal_damag = pygame.image.load('data/kotik_damag.png')
+animated_pengin = pygame.image.load('data/Pingein_player_animated_loose_hard_wave-export.png')
 
 # Группы спрайтов
 all_sprites = pygame.sprite.Group()
@@ -108,6 +109,10 @@ class Penguin(pygame.sprite.Sprite):
         self.current_energy = self.max_energy  # Текущая энергия
         self.energy_recovery_rate = self.max_energy / 22  # Восстановление энергии в секунду
         self.last_energy_update_time = pygame.time.get_ticks()  # Время последнего обновления энергии
+        self.frames = []
+        self.cut_sheet(animated_pengin, 73, 1)
+        self.cur_frame = 0
+        self.animated_loose_fd = False  # Проверка есть ли анимация
 
     def animated_down(self):
         self.image = penguin_down_image
@@ -120,6 +125,19 @@ class Penguin(pygame.sprite.Sprite):
     def animated_kant(self):
         self.image = down_kant_image
 
+    def animated_loose(self):
+        self.animated_loose_fd = True
+        self.cur_frame = 0
+        self.rect = self.frames[0].get_rect(center=self.rect.center)  # Центрируем прямоугольник
+        self.rect.y -= 60  # Поднимаем пингвина немного вверх
+
+    def cut_sheet(self, sheet, columns, rows):
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (468 * i, 267 * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, (468, 267))))
+
     def jump(self):
         if self.is_jumping:
             # Обновляем вертикальную скорость
@@ -130,15 +148,28 @@ class Penguin(pygame.sprite.Sprite):
             if self.rect.y >= self.start_y:
                 self.rect.y = self.start_y  # Возвращаем на начальную высоту
                 self.is_jumping = False  # Завершаем прыжок
-                self.velocity_y = 0  # Сбрасываем вертикальную скорость
 
-        else:
+        elif not self.animated_loose_fd:
             # Если не прыгаем, то возвращаемся на начальную высоту
             if self.rect.y < self.start_y:
                 self.velocity_y += self.gravity
                 self.rect.y += self.velocity_y
 
-    def update(self):
+    def update(self, time):
+        if time and self.animated_loose_fd:
+            self.cur_frame = (self.cur_frame + 1)
+            print(self.cur_frame)
+            if self.cur_frame == 73:
+                imga = penguin_image
+            else:
+                imga = self.frames[self.cur_frame]
+            self.image = imga
+            if self.cur_frame == 73:
+                self.rect = self.image.get_rect()
+                self.rect.x = self.initial_x
+                self.rect.y = self.start_y
+                self.animated_loose_fd = False
+
         if self.hanging:
             if pygame.time.get_ticks() - self.hang_start_time >= 1000:  # 1 секунда
                 self.hanging = False  # Завершаем зависание
@@ -762,6 +793,7 @@ def main():
     clock = pygame.time.Clock()
     show_loading_screen(screen)
     show_start_countdown(screen)
+    all_time = time.time()
     try:
         pygame.mixer.music.load(f'data/{track}.mp3')
         pygame.mixer.music.set_volume(volume)
@@ -843,13 +875,13 @@ def main():
                         continue
 
         keys = pygame.key.get_pressed()  # Получаем состояние всех клавиш
-        if keys[pygame.K_UP] and not penguin.is_jumping and penguin.current_energy >= 33:  # Прыжок при нажатии пробела
+        if keys[pygame.K_UP] and not penguin.is_jumping and penguin.current_energy >= 33 and not penguin.animated_loose_fd:  # Прыжок при нажатии пробела
             penguin.is_jumping = True
             penguin.velocity_y = -penguin.jump_height  # Устанавливаем начальную скорость прыжка
             penguin.current_energy -= 33  # Уменьшаем энергию на 33%
-        if keys[pygame.K_DOWN]:
+        if keys[pygame.K_DOWN] and not penguin.animated_loose_fd:
             penguin.animated_down()
-        else:
+        elif not penguin.animated_loose_fd:
             penguin.animated_up()
 
         # Ограничение движения пингвина, чтобы он не выходил за пределы экрана
@@ -875,6 +907,10 @@ def main():
             add_wave = True
             wave_time = time.time()
 
+        if all_time - end_time > 15:
+            all_time = time.time()
+            move_speed_obstacle += 6
+
         # Рассчитываем пройденное расстояние
         distance_traveled += move_speed_penguin / FPS  # Увеличиваем пройденное расстояние на скорость пингвина
         distance_traveled += move_speed_obstacle / FPS  # Увеличиваем пройденное расстояние на скорость волн
@@ -884,15 +920,15 @@ def main():
         screen.blit(distance_text, (10, 250))  # Отображаем расстояние ниже других текстов
 
         # Генерация препятствий с вероятностью 2%
-        if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150 and add_wave:
+        if random.randint(1, 100) < 2 and last_obstacle.rect.x > 150 and add_wave and not penguin.animated_loose_fd:
             add_wave = False
             type_wave_num = random.randint(0, 100)
-            if type_wave_num <= 12:  # 10% Вероятность
-                new_wave = Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites)
-                obstacles.append(new_wave)
-            elif 11 <= type_wave_num < 100:  # 90% Вероятность
-                new_wave = Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280, waves_sprites)
-                obstacles.append(new_wave)
+            if type_wave_num <= 80:  # 80% Вероятность
+                obstacles.append(
+                    Wave(id_obstacle, big_wave_image, "big_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 275, waves_sprites))
+            elif 80 <= type_wave_num < 100:  # 20% Вероятность
+                obstacles.append(Wave(id_obstacle, small_wave_image, "small_wave", -SCREEN_HEIGHT, SCREEN_HEIGHT - 280,
+                                      waves_sprites))
             last_obstacle = obstacles[-1]
             id_obstacle += 1
 
@@ -913,7 +949,14 @@ def main():
         sky.draw_sky(screen)  # Прорисовываем небо
         sky.draw_cloud(screen)  # Прорисовываем облака
         player_sprites.draw(screen)
-        penguin.update() # Обновление состояния пингвина
+        # Обновление состояния пингвина
+        endd_pa_time = time.time()
+        ele_time = endd_pa_time - start_time
+        if ele_time > 0.1:
+            penguin.update(True)
+            start_time = time.time()
+        else:
+            penguin.update(False)
         waves_sprites.update(move_speed_obstacle)
         waves_sprites.draw(screen)
         bird_sprites.update()  # Обновляем птиц
@@ -1013,6 +1056,7 @@ def main():
                         pass
                     else:
                         lives -= 1  # Уменьшаем количество жизней
+                        penguin.animated_loose()
                         if obstacle in obstacles:
                             obstacles.remove(obstacle)
                         waves_sprites.remove(obstacle)  # Удаляем столкнувшееся препятствие
