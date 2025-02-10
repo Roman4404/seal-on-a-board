@@ -35,10 +35,11 @@ def get_high_score():
     conn.close()
     return high_score
 
-def save_settings(volume, track='track1'):
+def save_settings(volume, track='track1', first_run=False):
     settings = {
         'volume': volume,
-        'track': track
+        'track': track,
+        'first_run': first_run
     }
     with open('settings.json', 'w') as f:
         json.dump(settings, f)
@@ -48,9 +49,10 @@ def load_settings():
         with open('settings.json', 'r') as f:
             settings = json.load(f)
             return (settings.get('volume', 0.5),
-                    settings.get('track', 'track1'))
+                    settings.get('track', 'track1'),
+                    settings.get('first_run', True))
     except (FileNotFoundError, json.JSONDecodeError):
-        return (0.5, 'track1')  # Возвращаем значения по умолчанию, если файл не найден или поврежден
+        return (0.5, 'track1', True)
 
 pygame.init()
 pygame.mixer.init()
@@ -782,10 +784,36 @@ def create_particles(position, penguin):
     for _ in range(particle_count):
         Particle_Water(position, random.choice(numbers), random.choice(numbers), penguin)
 
+def show_hint(screen):
+    font = pygame.font.Font(None, 36)
+    lines = [
+        "Управление:",
+        "Стрелка ВВЕРХ - Прыжок",
+        "Стрелка ВНИЗ - Присесть",
+        "Лови птиц чтобы зависнуть в воздухе!",
+        "Нажми любую кнопку чтобы начать..."
+    ]
+    while True:
+        screen.fill(BLUE)
+        y_offset = SCREEN_HEIGHT // 2 - 100
+        for line in lines:
+            text = font.render(line, True, WHITE)
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+            screen.blit(text, text_rect)
+            y_offset += 40
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                return
+
 # Основная функция игры
 def main():
     init_db()  # Инициализация базы данных
-    volume, track = load_settings()  # Загружаем настройки
+    volume, track, first_run = load_settings()  # Загружаем настройки
     pygame.mixer.music.set_volume(volume)  # Установка громкости музыки
     high_score = get_high_score()  # Получаем текущий наивысший балл
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -794,6 +822,9 @@ def main():
     show_loading_screen(screen)
     show_start_countdown(screen)
     all_time = time.time()
+    if first_run:
+        show_hint(screen)
+        save_settings(volume, track, first_run=False)
     try:
         pygame.mixer.music.load(f'data/{track}.mp3')
         pygame.mixer.music.set_volume(volume)
